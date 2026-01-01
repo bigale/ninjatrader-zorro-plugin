@@ -5,11 +5,11 @@ This guide explains how to use NinjaTrader's Playback Connection (Market Replay)
 ## Overview
 
 **Playback Connection** allows you to:
-- ? Test strategies with historical data as if it were live
-- ? Speed up or slow down time
-- ? Test 24/7 without waiting for market open
-- ? Replay specific market conditions
-- ? Practice manual trading
+- ✅ Test strategies with historical data as if it were live
+- ✅ Speed up or slow down time
+- ✅ Test 24/7 without waiting for market open
+- ✅ Replay specific market conditions
+- ✅ Practice manual trading
 
 **Works with our plugin:** The ZorroBridge AddOn sees playback data as live data, so everything works identically!
 
@@ -370,11 +370,11 @@ function run()
 ## Summary
 
 **Playback with our plugin:**
-- ? Works exactly like live trading
-- ? No code changes needed
-- ? Great for strategy testing
-- ? Can run 24/7 at any speed
-- ? Uses same account structure
+- ✅ Works exactly like live trading
+- ✅ No code changes needed
+- ✅ Great for strategy testing
+- ✅ Can run 24/7 at any speed
+- ✅ Uses same account structure
 
 **Key Points:**
 1. Connect to Playback in NinjaTrader

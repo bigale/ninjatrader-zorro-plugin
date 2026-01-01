@@ -8,11 +8,11 @@ Zorro test scripts for the NinjaTrader 8 plugin.
 **Purpose:** Comprehensive plugin test suite
 
 **Tests:**
-- ? Connection to NinjaTrader
-- ? Account information
-- ? Market data subscription
-- ? Position tracking
-- ? System information
+- ✅ Connection to NinjaTrader
+- ✅ Account information
+- ✅ Market data subscription
+- ✅ Position tracking
+- ✅ System information
 
 **Usage:**
 1. Copy to `C:\Zorro\Strategy\`
@@ -36,9 +36,9 @@ Plugin Status: OPERATIONAL
 **Purpose:** Quick connection and price test
 
 **Tests:**
-- ? Basic connectivity
-- ? Live price retrieval
-- ? Bar generation
+- ✅ Basic connectivity
+- ✅ Live price retrieval
+- ✅ Bar generation
 
 **Usage:**
 1. Copy to `C:\Zorro\Strategy\`

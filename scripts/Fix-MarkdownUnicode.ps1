@@ -56,10 +56,34 @@ foreach ($file in $mdFiles) {
     }
     
     # Fix smart quotes
-    $content = $content.Replace([char]0x201C, '"')  # LEFT DOUBLE QUOTATION MARK
-    $content = $content.Replace([char]0x201D, '"')  # RIGHT DOUBLE QUOTATION MARK
-    $content = $content.Replace([char]0x2018, "'")  # LEFT SINGLE QUOTATION MARK
-    $content = $content.Replace([char]0x2019, "'")  # RIGHT SINGLE QUOTATION MARK
+    if ($content.Contains([char]0x201C)) {
+        $count = ($content.ToCharArray() | Where-Object { $_ -eq [char]0x201C }).Count
+        $content = $content.Replace([char]0x201C, '"')
+        $fixCount += $count
+    }
+    if ($content.Contains([char]0x201D)) {
+        $count = ($content.ToCharArray() | Where-Object { $_ -eq [char]0x201D }).Count
+        $content = $content.Replace([char]0x201D, '"')
+        $fixCount += $count
+    }
+    if ($content.Contains([char]0x2018)) {
+        $count = ($content.ToCharArray() | Where-Object { $_ -eq [char]0x2018 }).Count
+        $content = $content.Replace([char]0x2018, "'")
+        $fixCount += $count
+    }
+    if ($content.Contains([char]0x2019)) {
+        $count = ($content.ToCharArray() | Where-Object { $_ -eq [char]0x2019 }).Count
+        $content = $content.Replace([char]0x2019, "'")
+        $fixCount += $count
+    }
+    
+    # Fix "- ?" pattern (broken checkmarks in lists)
+    if ($content -match '-\s+\?') {
+        $matches = [regex]::Matches($content, '-\s+\?')
+        $content = $content -replace '-\s+\?', '- ?'
+        $fixCount += $matches.Count
+        Write-Host "  [FIX] Replaced $($matches.Count) broken checkmark(s) '- ?' in: $relativePath" -ForegroundColor Cyan
+    }
     
     # Check for multiple consecutive question marks (often indicates encoding issues)
     if ($content -match '\?{2,}') {
