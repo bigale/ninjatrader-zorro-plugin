@@ -11,6 +11,7 @@ Complete guide to all documentation for the NinjaTrader 8 Zorro Plugin.
 | **[README.md](../README.md)** | Project overview & quick start | Start here |
 | **[INSTALLATION.md](INSTALLATION.md)** | Complete setup instructions | First time setup |
 | **[GETTING_STARTED.md](GETTING_STARTED.md)** | Your first trades | After installation |
+| **[PLAYBACK_TESTING.md](PLAYBACK_TESTING.md)** | Use Market Replay for testing | For strategy testing |
 | **[API_REFERENCE.md](API_REFERENCE.md)** | Complete API documentation | When developing |
 | **[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** | Common issues & solutions | When stuck |
 
@@ -178,6 +179,20 @@ ninjatrader-zorro-plugin/
 
 ---
 
+### PLAYBACK_TESTING.md
+**Purpose:** Guide to using Market Replay
+
+**Contains:**
+- How to access Market Replay
+- Steps to record and play back tests
+- Analyzing replay results
+- Common issues with Market Replay
+- Tips for effective testing
+
+**Read when:** Testing strategies with historical data
+
+---
+
 ## ?? Common Scenarios
 
 ### "I want to install the plugin"
@@ -207,6 +222,9 @@ ninjatrader-zorro-plugin/
 ### "What's new in this version?"
 ? [CHANGELOG.md](../CHANGELOG.md)
 
+### "How do I test my strategies?"
+? [PLAYBACK_TESTING.md](PLAYBACK_TESTING.md)
+
 ---
 
 ## ?? Documentation Statistics
@@ -220,8 +238,9 @@ ninjatrader-zorro-plugin/
 | TROUBLESHOOTING.md | ~350 lines | 12 |
 | CHANGELOG.md | ~150 lines | 3 |
 | CONTRIBUTING.md | ~300 lines | 10 |
+| PLAYBACK_TESTING.md | ~350 lines | 9 |
 
-**Total:** ~2,450 lines of documentation
+**Total:** ~2,800 lines of documentation
 
 ---
 

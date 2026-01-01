@@ -227,6 +227,8 @@ Test scripts in `scripts/` folder:
 
 Copy to `C:\Zorro\Strategy\` and run in Zorro.
 
+**Playback Testing:** Use NinjaTrader's Market Replay to test strategies with historical data at accelerated speeds. See **[Playback Testing Guide](docs/PLAYBACK_TESTING.md)** for setup.
+
 ## 📝 Known Limitations
 
 | Feature | Status | Notes |
