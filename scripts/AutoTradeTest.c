@@ -27,6 +27,9 @@ function run()
 	BarPeriod = BARPERIOD;
 	LookBack = 0; // Live only
 	
+	// CRITICAL: Skip market closed check for simulated data
+	Skip = 8;  // Skip market closed check
+	
 	if(is(INITRUN)) {
 		brokerCommand(SET_DIAGNOSTICS, 1);
 		asset(ASSET);
@@ -39,6 +42,7 @@ function run()
 		printf("\n========================================");
 		printf("\nAsset: %s", Asset);
 		printf("\nPrice: %.2f", priceClose());
+		printf("\nSkip Market Hours Check: ENABLED");
 		printf("\n");
 	}
 	
