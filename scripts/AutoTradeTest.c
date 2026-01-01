@@ -24,11 +24,11 @@ int g_TestsFailed = 0;
 ////////////////////////////////////////////////////////////
 function run()
 {
+	// CRITICAL: Skip market closed check BEFORE everything else
+	Skip = 8;  // Skip market closed check (for simulated data testing)
+	
 	BarPeriod = BARPERIOD;
 	LookBack = 0; // Live only
-	
-	// CRITICAL: Skip market closed check for simulated data
-	Skip = 8;  // Skip market closed check
 	
 	if(is(INITRUN)) {
 		brokerCommand(SET_DIAGNOSTICS, 1);
