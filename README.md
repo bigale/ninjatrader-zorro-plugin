@@ -19,15 +19,19 @@ A full-featured Zorro broker plugin for automated trading via NinjaTrader 8.1+ u
 
 ## 🏗️ Architecture
 
-```
-┌─────────────┐       TCP        ┌──────────────┐      NT8 API     ┌──────────────┐
-│   Zorro     │ ←─────────────→ │  ZorroBridge    │ ←────────────────→ │ NinjaTrader  │
-│  (Trading   │   Port 8888      │  AddOn (C#)  │    NinjaScript    │     8.1+     │
-│   Script)   │                  │              │                    │              │
-└─────────────┘                  └──────────────┘                   └──────────────┘
-      ↓                                                                      ↓
-  NT8.dll                                                            Market Data
-  (Plugin)                                                           Orders
+```mermaid
+graph LR
+    A[Zorro<br/>Trading Script] <-->|TCP<br/>Port 8888| B[ZorroBridge<br/>AddOn C#]
+    B <-->|NT8 API| C[NinjaTrader 8.1+]
+    A -.->|uses| D[NT8.dll<br/>C++ Plugin]
+    D <-->|TCP| B
+    C -.->|provides| E[Market Data<br/>Orders<br/>Positions]
+    
+    style A fill:#e1f5ff
+    style B fill:#fff4e1
+    style C fill:#e8f5e9
+    style D fill:#f3e5f5
+    style E fill:#fce4ec
 ```
 
 **Components:**
