@@ -8,6 +8,7 @@
 #define VERBOSE 2
 #define LOG_TRADES
 #define ASSET "MES 0326"
+#define NOWEEKEND  // Skip weekend check
 
 ////////////////////////////////////////////////////////////
 // Test State Machine
@@ -24,9 +25,6 @@ int g_TestsFailed = 0;
 ////////////////////////////////////////////////////////////
 function run()
 {
-	// CRITICAL: Skip market closed check BEFORE everything else
-	Skip = 8;  // Skip market closed check (for simulated data testing)
-	
 	BarPeriod = BARPERIOD;
 	LookBack = 0; // Live only
 	
@@ -42,7 +40,6 @@ function run()
 		printf("\n========================================");
 		printf("\nAsset: %s", Asset);
 		printf("\nPrice: %.2f", priceClose());
-		printf("\nSkip Market Hours Check: ENABLED");
 		printf("\n");
 	}
 	
