@@ -498,12 +498,40 @@ DLLFUNC int BrokerSell2(int nTradeID, int nAmount, double Limit,
         return 0;
     }
     
+    // Update filled quantity from NinjaTrader
+    if (!order->orderId.empty()) {
+        int currentFilled = g_bridge->Filled(order->orderId.c_str());
+        if (currentFilled > 0) {
+            order->filled = currentFilled;
+        }
+    }
+    
     // Determine close action (opposite of original)
     const char* action = (order->action == "BUY") ? "SELL" : "BUY";
-    int quantity = (nAmount > 0) ? nAmount : order->filled;
+    
+    // Determine quantity to close
+    int quantity = 0;
+    if (nAmount > 0) {
+        // Specific amount requested
+        quantity = nAmount;
+    } else {
+        // Close all - use filled quantity
+        quantity = order->filled;
+        
+        // If order->filled is still 0, check current position from NinjaTrader
+        if (quantity <= 0 && !order->instrument.empty()) {
+            int position = g_bridge->MarketPosition(order->instrument.c_str(), g_account.c_str());
+            quantity = abs(position);
+            
+            if (quantity > 0) {
+                LogMessage("# Using current position %d for close order %d", quantity, nTradeID);
+            }
+        }
+    }
     
     if (quantity <= 0) {
-        LogError("Invalid close quantity for order %d", nTradeID);
+        LogError("Invalid close quantity for order %d (filled=%d, nAmount=%d)", 
+            nTradeID, order->filled, nAmount);
         return 0;
     }
     
@@ -519,6 +547,9 @@ DLLFUNC int BrokerSell2(int nTradeID, int nAmount, double Limit,
     // Get new order ID for the closing order
     const char* ntOrderId = g_bridge->NewOrderId();
     std::string closeOrderId = ntOrderId ? ntOrderId : "";
+    
+    LogMessage("# Closing order %d: %s %d %s @ %s", 
+        nTradeID, action, quantity, order->instrument.c_str(), orderType);
     
     // Place closing order
     int result = g_bridge->Command(
