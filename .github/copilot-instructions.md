@@ -124,3 +124,27 @@ style NodeName fill:#HEXCOLOR,stroke:#333,stroke-width:2px,color:#000
 .\private-docs\test-zorro.ps1      # Basic tests
 .\private-docs\test-full.ps1       # Full test suite
 .\private-docs\build-and-test.bat  # Build + test
+
+```
+
+### **CRITICAL: Test Before Commit**
+?? **NEVER commit code changes without confirming tests pass!**
+
+**Required workflow:**
+1. Make code changes
+2. Build the plugin: `.\private-docs\build-simple.bat`
+3. Install to zorro: `.\private-docs\install.bat`
+4. Run tests: `.\private-docs\test-zorro.ps1` or `.\private-docs\test-full.ps1`
+5. **WAIT for user confirmation** that tests pass
+6. Only then commit and push
+
+**Why this matters:**
+- Zorro scripts may have compilation errors
+- Tests may fail due to runtime issues
+- User needs to observe test results
+- Broken commits waste time and create bad history
+
+**If tests fail:**
+- Fix the issue
+- Repeat steps 2-4
+- Get user confirmation before committing
