@@ -16,7 +16,7 @@ This plugin uses a **modern TCP bridge architecture** that works with NinjaTrade
 ?  (Trading Bot)  ? ??????? ?  (C++ Plugin)   ? ??????? ?  (Trading        ?
 ?                 ?  Calls  ?                 ?   TCP   ?   Platform)      ?
 ?  - Strategies   ?         ?  - TcpBridge    ?  :8888  ?                  ?
-?  - Scripts      ?         ?  - Order Mgmt   ?         ?  - ZorroBridge      ?
+?  - Scripts      ?         ?  - Order Mgmt   ?         ?  - ZorroBridge   ?
 ?  - Backtests    ?         ?  - Data Parsing ?         ?    AddOn (C#)    ?
 ???????????????????         ???????????????????         ?  - Market Data   ?
                                                           ?  - Orders        ?
@@ -217,15 +217,15 @@ NT8-Sim,Sim101,,Demo
 
 ## File Naming Confusion
 
-**"ZorroBridge" AddOn name is historical:**
-- Named for compatibility/recognition
+**"ZorroBridge" AddOn name is clear:**
+- Named to describe function: bridge between Zorro and NinjaTrader
 - **NOT** using old ATI (NtDirect.dll)
 - Actually a TCP bridge implementation
 
-**Better mental model:**
+**Mental model:**
 - Think "Zorro Bridge for NinjaTrader"
-- ATI in the name = "Automated Trading Interface" (generic term)
-- Not = NinjaTrader's old ATI DLL
+- Bridge = connects two systems via TCP
+- Modern, not legacy technology
 
 ---
 
@@ -260,10 +260,10 @@ NT8-Sim,Sim101,,Demo
 - Legacy ATI approach ?
 - Outdated architecture ?
 
-**Confusion source:**
-- "ZorroBridge" name (historical)
-- But uses TCP bridge (modern)
-- No actual ATI DLL dependency
+**Naming clarity:**
+- "ZorroBridge" = TCP bridge (accurate)
+- No ATI terminology confusion
+- Modern, clear naming
 
 ---
 
