@@ -27,11 +27,11 @@ graph LR
     D <-->|TCP| B
     C -.->|provides| E[Market Data<br/>Orders<br/>Positions]
     
-    style A fill:#e1f5ff
-    style B fill:#fff4e1
-    style C fill:#e8f5e9
-    style D fill:#f3e5f5
-    style E fill:#fce4ec
+    style A fill:#e1f5ff,stroke:#333,stroke-width:2px,color:#000
+    style B fill:#fff4e1,stroke:#333,stroke-width:2px,color:#000
+    style C fill:#e8f5e9,stroke:#333,stroke-width:2px,color:#000
+    style D fill:#f3e5f5,stroke:#333,stroke-width:2px,color:#000
+    style E fill:#fce4ec,stroke:#333,stroke-width:2px,color:#000
 ```
 
 **Components:**
