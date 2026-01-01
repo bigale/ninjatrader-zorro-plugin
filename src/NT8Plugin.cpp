@@ -1,7 +1,7 @@
 // NT8Plugin.cpp - Zorro Broker Plugin for NinjaTrader 8
 // Copyright (c) 2025
 //
-// A full-featured Zorro broker plugin using NinjaTrader's ATI (NtDirect.dll)
+// A full-featured Zorro broker plugin using TCP bridge architecture
 // Supports: Market data, order placement, position tracking, account info
 
 #include "NT8Plugin.h"
