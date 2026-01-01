@@ -101,3 +101,26 @@ style NodeName fill:#HEXCOLOR,stroke:#333,stroke-width:2px,color:#000
 - Use "AddOn" (not "plugin" for C# component)
 - Use "plugin" for NT8.dll specifically
 - Clarify "live trading" vs "playback/simulation"
+
+## Testing Workflow
+
+### Local Zorro Installation
+- **Location:** `zorro/` folder in repository root (gitignored)
+- **Strategy Folder:** Configured to point to `scripts/` in repo
+- **DO NOT copy scripts** - They're loaded directly from `scripts/` folder
+- **Test scripts ARE tracked** in Git (in `scripts/` folder)
+
+### Testing Scripts
+- Test scripts in `scripts/` folder:
+  - `NT8Test.c` - Connection and data tests
+  - `AutoTradeTest.c` - Automated trading tests
+  - `SimpleNT8Test.c` - Quick smoke test
+- PowerShell/batch scripts in `private-docs/` use local `zorro/` folder
+- All paths point to repo structure, no external dependencies
+
+### Running Tests
+```bash
+# From repository root
+.\private-docs\test-zorro.ps1      # Basic tests
+.\private-docs\test-full.ps1       # Full test suite
+.\private-docs\build-and-test.bat  # Build + test
