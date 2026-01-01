@@ -168,23 +168,23 @@ See **[API Reference](docs/API_REFERENCE.md)** for complete documentation.
 
 ```
 ninjatrader-zorro-plugin/
-├── include/
-│   ├── NT8Plugin.h          # Plugin interface
-│   ├── TcpBridge.h          # TCP communication
-│   └── trading.h            # Zorro types
-├── src/
-│   ├── NT8Plugin.cpp        # Main implementation
-│   ├── TcpBridge.cpp        # TCP bridge
-│   └── NT8Plugin.def        # DLL exports
-├── ninjatrader-addon/
-│   └── ZorroBridge.cs          # NT8 AddOn (C#)
-├── scripts/
-│   ├── NT8Test.c            # Comprehensive test
-│   └── SimpleNT8Test.c      # Quick test
-├── docs/                    # Documentation
-├── CMakeLists.txt
-├── README.md
-└── LICENSE
+|-- include/
+|   |-- NT8Plugin.h          # Plugin interface
+|   |-- TcpBridge.h          # TCP communication
+|   +-- trading.h            # Zorro types
+|-- src/
+|   |-- NT8Plugin.cpp        # Main implementation
+|   |-- TcpBridge.cpp        # TCP bridge
+|   +-- NT8Plugin.def        # DLL exports
+|-- ninjatrader-addon/
+|   +-- ZorroBridge.cs          # NT8 AddOn (C#)
+|-- scripts/
+|   |-- NT8Test.c            # Comprehensive test
+|   +-- SimpleNT8Test.c      # Quick test
+|-- docs/                    # Documentation
+|-- CMakeLists.txt
+|-- README.md
++-- LICENSE
 ```
 
 ## 🐛 Troubleshooting
