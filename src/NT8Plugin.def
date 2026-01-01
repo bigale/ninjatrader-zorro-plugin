@@ -1,0 +1,14 @@
+; NT8Plugin.def - Export definitions for Zorro broker plugin
+
+LIBRARY "NT8"
+
+EXPORTS
+    BrokerOpen
+    BrokerLogin
+    BrokerTime
+    BrokerAsset
+    BrokerAccount
+    BrokerBuy2
+    BrokerTrade
+    BrokerSell2
+    BrokerCommand
