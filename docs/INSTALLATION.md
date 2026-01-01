@@ -79,7 +79,7 @@ The AddOn provides the TCP bridge between Zorro and NinjaTrader.
 
 Copy file from:
 ```
-ninjatrader-zorro-plugin\ninjatrader-addon\ZorroATI.cs
+ninjatrader-zorro-plugin\ninjatrader-addon\ZorroBridge.cs
 ```
 
 To:
@@ -286,7 +286,7 @@ After successful installation:
 | File | Location |
 |------|----------|
 | Plugin DLL | `C:\Zorro\Plugin\NT8.dll` |
-| AddOn Source | `Documents\NinjaTrader 8\bin\Custom\AddOns\ZorroATI.cs` |
+| AddOn Source | `Documents\NinjaTrader 8\bin\Custom\AddOns\ZorroBridge.cs` |
 | Accounts | `C:\Zorro\History\accounts.csv` |
 | Assets | `C:\Zorro\History\AssetsRithmic.csv` |
 | Test Scripts | `C:\Zorro\Strategy\` |

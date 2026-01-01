@@ -21,7 +21,7 @@ A full-featured Zorro broker plugin for automated trading via NinjaTrader 8.1+ u
 
 ```
 ┌─────────────┐       TCP        ┌──────────────┐      NT8 API     ┌──────────────┐
-│   Zorro     │ ←─────────────→ │  ZorroATI    │ ←────────────────→ │ NinjaTrader  │
+│   Zorro     │ ←─────────────→ │  ZorroBridge    │ ←────────────────→ │ NinjaTrader  │
 │  (Trading   │   Port 8888      │  AddOn (C#)  │    NinjaScript    │     8.1+     │
 │   Script)   │                  │              │                    │              │
 └─────────────┘                  └──────────────┘                   └──────────────┘
@@ -32,7 +32,7 @@ A full-featured Zorro broker plugin for automated trading via NinjaTrader 8.1+ u
 
 **Components:**
 - **NT8.dll** - Zorro broker plugin (C++17, 32-bit)
-- **ZorroATI.cs** - NinjaScript AddOn for NT8 8.1+
+- **ZorroBridge.cs** - NinjaScript AddOn for NT8 8.1+
 - **TCP Bridge** - localhost:8888 communication layer
 
 ## 📋 Requirements
@@ -173,7 +173,7 @@ ninjatrader-zorro-plugin/
 │   ├── TcpBridge.cpp        # TCP bridge
 │   └── NT8Plugin.def        # DLL exports
 ├── ninjatrader-addon/
-│   └── ZorroATI.cs          # NT8 AddOn (C#)
+│   └── ZorroBridge.cs          # NT8 AddOn (C#)
 ├── scripts/
 │   ├── NT8Test.c            # Comprehensive test
 │   └── SimpleNT8Test.c      # Quick test

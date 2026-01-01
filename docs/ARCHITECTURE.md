@@ -16,7 +16,7 @@ This plugin uses a **modern TCP bridge architecture** that works with NinjaTrade
 ?  (Trading Bot)  ? ??????? ?  (C++ Plugin)   ? ??????? ?  (Trading        ?
 ?                 ?  Calls  ?                 ?   TCP   ?   Platform)      ?
 ?  - Strategies   ?         ?  - TcpBridge    ?  :8888  ?                  ?
-?  - Scripts      ?         ?  - Order Mgmt   ?         ?  - ZorroATI      ?
+?  - Scripts      ?         ?  - Order Mgmt   ?         ?  - ZorroBridge      ?
 ?  - Backtests    ?         ?  - Data Parsing ?         ?    AddOn (C#)    ?
 ???????????????????         ???????????????????         ?  - Market Data   ?
                                                           ?  - Orders        ?
@@ -76,8 +76,8 @@ include/
 
 ---
 
-### 3. NinjaScript AddOn (ZorroATI.cs)
-**Location:** `ninjatrader-addon/ZorroATI.cs`
+### 3. NinjaScript AddOn (ZorroBridge.cs)
+**Location:** `ninjatrader-addon/ZorroBridge.cs`
 
 **Installation:**
 ```
@@ -129,7 +129,7 @@ LOGOUT                       ?    OK:Logged out
 1. Zorro calls BrokerAsset("MESH26", &price, ...)
 2. NT8Plugin.cpp converts MESH26 ? MES 03-26
 3. TcpBridge sends: "GETPRICE:MES 03-26"
-4. ZorroATI.cs queries NT8 MarketData
+4. ZorroBridge.cs queries NT8 MarketData
 5. Returns: "PRICE:6047.50:6047.25:6047.75:1234"
 6. TcpBridge parses response
 7. NT8Plugin returns price to Zorro
@@ -141,7 +141,7 @@ LOGOUT                       ?    OK:Logged out
 2. Calls BrokerBuy2("MESH26", 1, 0, 0, ...)
 3. NT8Plugin creates order ID
 4. TcpBridge sends: "PLACEORDER:Sim101:MES 03-26:BUY:1:MARKET:0:0:GTC:..."
-5. ZorroATI.cs creates NT8 order
+5. ZorroBridge.cs creates NT8 order
 6. Returns: "ORDER:abc123"
 7. NT8Plugin tracks order
 8. Waits for fill confirmation
@@ -166,7 +166,7 @@ Zorro ? NT8.dll ? NtDirect.dll ? NinjaTrader
 
 ### New Approach (Current)
 ```
-Zorro ? NT8.dll ? TCP:8888 ? ZorroATI AddOn ? NinjaTrader
+Zorro ? NT8.dll ? TCP:8888 ? ZorroBridge AddOn ? NinjaTrader
                    ? Works perfectly!
 ```
 
@@ -191,7 +191,7 @@ cmake --build . --config Release
 copy Release\NT8.dll C:\Zorro\Plugin\
 
 # 3. Install AddOn
-copy ninjatrader-addon\ZorroATI.cs Documents\NinjaTrader 8\bin\Custom\AddOns\
+copy ninjatrader-addon\ZorroBridge.cs Documents\NinjaTrader 8\bin\Custom\AddOns\
 # Then press F5 in NinjaTrader to compile
 
 # 4. Configure Zorro
@@ -217,7 +217,7 @@ NT8-Sim,Sim101,,Demo
 
 ## File Naming Confusion
 
-**"ZorroATI" AddOn name is historical:**
+**"ZorroBridge" AddOn name is historical:**
 - Named for compatibility/recognition
 - **NOT** using old ATI (NtDirect.dll)
 - Actually a TCP bridge implementation
@@ -261,7 +261,7 @@ NT8-Sim,Sim101,,Demo
 - Outdated architecture ?
 
 **Confusion source:**
-- "ZorroATI" name (historical)
+- "ZorroBridge" name (historical)
 - But uses TCP bridge (modern)
 - No actual ATI DLL dependency
 

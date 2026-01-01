@@ -152,7 +152,7 @@ DLLFUNC int BrokerLogin(char* User, char* Pwd, char* Type, char* Accounts)
             LogError("Failed to connect to NinjaTrader AddOn on localhost:8888");
             LogError("Make sure:");
             LogError("  1. NinjaTrader 8 is running");
-            LogError("  2. ZorroATI AddOn is installed and compiled");
+            LogError("  2. ZorroBridge AddOn is installed and compiled");
             LogError("  3. AddOn is enabled (check Output window in NT8)");
             return 0;
         }

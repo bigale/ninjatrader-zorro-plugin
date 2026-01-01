@@ -1,5 +1,5 @@
-// ZorroATI.cs - NinjaTrader 8.1 AddOn for Zorro Integration
-// Place this file in: C:\Users\bigal\Documents\NinjaTrader 8\bin\Custom\AddOns\
+// ZorroBridge.cs - NinjaTrader 8.1 AddOn for Zorro Integration
+// Place this file in: Documents\NinjaTrader 8\bin\Custom\AddOns\
 //
 // This AddOn creates a TCP server that allows Zorro to communicate with NinjaTrader 8.1+
 // Compile: Tools -> Compile -> Compile All (or F5) in NinjaTrader
@@ -18,7 +18,7 @@ using NinjaTrader.NinjaScript;
 
 namespace NinjaTrader.NinjaScript.AddOns
 {
-    public class ZorroATI : AddOnBase
+    public class ZorroBridge : AddOnBase
     {
         private TcpListener tcpListener;
         private Thread listenerThread;
@@ -33,19 +33,19 @@ namespace NinjaTrader.NinjaScript.AddOns
         {
             if (State == State.SetDefaults)
             {
-                Name = "Zorro ATI Bridge";
+                Name = "Zorro Bridge";
                 Description = "TCP bridge for Zorro trading platform - NT8 8.1+ compatible";
             }
             else if (State == State.Configure)
             {
                 // Start the TCP server as soon as the AddOn is configured
                 // This happens at NinjaTrader startup, no need to wait for Realtime
-                LogMessage("Zorro ATI Bridge starting...");
+                LogMessage("Zorro Bridge starting...");
                 StartTcpServer();
             }
             else if (State == State.Terminated)
             {
-                LogMessage("Zorro ATI Bridge stopping...");
+                LogMessage("Zorro Bridge stopping...");
                 StopTcpServer();
             }
         }
@@ -62,7 +62,7 @@ namespace NinjaTrader.NinjaScript.AddOns
                 listenerThread.IsBackground = true;
                 listenerThread.Start();
                 
-                LogMessage($"Zorro ATI Bridge listening on port {PORT}");
+                LogMessage($"Zorro Bridge listening on port {PORT}");
             }
             catch (Exception ex)
             {
@@ -233,33 +233,33 @@ namespace NinjaTrader.NinjaScript.AddOns
             
             if (nt8Symbol != zorroSymbol)
             {
-                Print($"[Zorro ATI] Converted symbol: {zorroSymbol} -> {nt8Symbol}");
+                Print($"[Zorro Bridge] Converted symbol: {zorroSymbol} -> {nt8Symbol}");
             }
             
             Instrument instrument = Instrument.GetInstrument(nt8Symbol);
             if (instrument == null)
             {
-                Print($"[Zorro ATI] ERROR: Instrument.GetInstrument returned null for '{nt8Symbol}'");
-                Print($"[Zorro ATI] NinjaTrader does not recognize this instrument");
-                Print($"[Zorro ATI] Make sure the instrument exists and is spelled correctly in NT8");
+                Print($"[Zorro Bridge] ERROR: Instrument.GetInstrument returned null for '{nt8Symbol}'");
+                Print($"[Zorro Bridge] NinjaTrader does not recognize this instrument");
+                Print($"[Zorro Bridge] Make sure the instrument exists and is spelled correctly in NT8");
                 return $"ERROR:Instrument '{nt8Symbol}' not found in NinjaTrader";
             }
 
-            Print($"[Zorro ATI] Instrument found: {instrument.FullName}");
+            Print($"[Zorro Bridge] Instrument found: {instrument.FullName}");
             
             // Check if market data is available
             if (instrument.MarketData == null)
             {
-                Print($"[Zorro ATI] WARNING: MarketData is null for {nt8Symbol}");
-                Print($"[Zorro ATI] You may need to connect to a data feed in NinjaTrader");
+                Print($"[Zorro Bridge] WARNING: MarketData is null for {nt8Symbol}");
+                Print($"[Zorro Bridge] You may need to connect to a data feed in NinjaTrader");
             }
             else
             {
-                Print($"[Zorro ATI] MarketData available for {nt8Symbol}");
+                Print($"[Zorro Bridge] MarketData available for {nt8Symbol}");
             }
 
             subscribedInstruments[zorroSymbol] = instrument;
-            Print($"[Zorro ATI] Subscribed to {nt8Symbol}");
+            Print($"[Zorro Bridge] Subscribed to {nt8Symbol}");
             
             return $"OK:Subscribed to {nt8Symbol}";
         }
@@ -339,15 +339,15 @@ namespace NinjaTrader.NinjaScript.AddOns
 
             string zorroSymbol = parts[1];
             
-            Print($"[Zorro ATI] HandleGetPrice called for: {zorroSymbol}");
+            Print($"[Zorro Bridge] HandleGetPrice called for: {zorroSymbol}");
             
             if (!subscribedInstruments.ContainsKey(zorroSymbol))
             {
-                Print($"[Zorro ATI] ERROR: Not subscribed to {zorroSymbol}");
-                Print($"[Zorro ATI] Subscribed instruments count: {subscribedInstruments.Count}");
+                Print($"[Zorro Bridge] ERROR: Not subscribed to {zorroSymbol}");
+                Print($"[Zorro Bridge] Subscribed instruments count: {subscribedInstruments.Count}");
                 foreach (var key in subscribedInstruments.Keys)
                 {
-                    Print($"[Zorro ATI] - Subscribed: {key}");
+                    Print($"[Zorro Bridge] - Subscribed: {key}");
                 }
                 return "ERROR:Not subscribed to instrument";
             }
@@ -356,7 +356,7 @@ namespace NinjaTrader.NinjaScript.AddOns
             
             if (instrument == null)
             {
-                Print($"[Zorro ATI] ERROR: Instrument is null for {zorroSymbol}");
+                Print($"[Zorro Bridge] ERROR: Instrument is null for {zorroSymbol}");
                 return "ERROR:Instrument is null";
             }
             
@@ -370,31 +370,31 @@ namespace NinjaTrader.NinjaScript.AddOns
                 if (instrument.MarketData.Last != null)
                     last = instrument.MarketData.Last.Price;
                 else
-                    Print($"[Zorro ATI] WARNING: Last is null");
+                    Print($"[Zorro Bridge] WARNING: Last is null");
                     
                 if (instrument.MarketData.Bid != null)
                     bid = instrument.MarketData.Bid.Price;
                 else
-                    Print($"[Zorro ATI] WARNING: Bid is null");
+                    Print($"[Zorro Bridge] WARNING: Bid is null");
                     
                 if (instrument.MarketData.Ask != null)
                     ask = instrument.MarketData.Ask.Price;
                 else
-                    Print($"[Zorro ATI] WARNING: Ask is null");
+                    Print($"[Zorro Bridge] WARNING: Ask is null");
                     
                 if (instrument.MarketData.DailyVolume != null)
                     volume = instrument.MarketData.DailyVolume.Volume;
                 else
-                    Print($"[Zorro ATI] WARNING: DailyVolume is null");
+                    Print($"[Zorro Bridge] WARNING: DailyVolume is null");
 
-                Print($"[Zorro ATI] Returning price - Last:{last} Bid:{bid} Ask:{ask} Vol:{volume}");
+                Print($"[Zorro Bridge] Returning price - Last:{last} Bid:{bid} Ask:{ask} Vol:{volume}");
 
                 return $"PRICE:{last}:{bid}:{ask}:{volume}";
             }
             catch (Exception ex)
             {
-                Print($"[Zorro ATI] ERROR getting price data: {ex.Message}");
-                Print($"[Zorro ATI] Stack trace: {ex.StackTrace}");
+                Print($"[Zorro Bridge] ERROR getting price data: {ex.Message}");
+                Print($"[Zorro Bridge] Stack trace: {ex.StackTrace}");
                 return $"ERROR:{ex.Message}";
             }
         }
@@ -515,7 +515,7 @@ namespace NinjaTrader.NinjaScript.AddOns
         private void LogMessage(string message)
         {
             // NT8 8.1 uses Print instead of Output.Process
-            Print($"[Zorro ATI] {message}");
+            Print($"[Zorro Bridge] {message}");
         }
     }
 }

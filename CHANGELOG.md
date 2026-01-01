@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Initial release of NT8 Zorro Plugin
 - TCP bridge architecture for NT8 8.1+ compatibility
-- NinjaScript AddOn (ZorroATI.cs) for NinjaTrader side
+- NinjaScript AddOn (ZorroBridge.cs) for NinjaTrader side
 - Full broker API implementation:
   - BrokerOpen - Plugin initialization
   - BrokerLogin - TCP connection to NinjaTrader
@@ -128,7 +128,7 @@ If upgrading from an older version that used NtDirect.dll:
 **Migration Steps:**
 1. Remove old NT8.dll from Plugin folder
 2. Build new version from source
-3. Install ZorroATI.cs AddOn in NinjaTrader
+3. Install ZorroBridge.cs AddOn in NinjaTrader
 4. Update accounts.csv if needed
 5. Test with simulation account
 

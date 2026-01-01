@@ -69,12 +69,12 @@ Should see: [Zorro ATI] Zorro ATI Bridge listening on port 8888
 
 File must be at:
 ```
-C:\Users\<YourName>\Documents\NinjaTrader 8\bin\Custom\AddOns\ZorroATI.cs
+C:\Users\<YourName>\Documents\NinjaTrader 8\bin\Custom\AddOns\ZorroBridge.cs
 ```
 
 **Verify:**
 ```powershell
-Get-ChildItem "C:\Users\$env:USERNAME\Documents\NinjaTrader 8\bin\Custom\AddOns" -Filter "ZorroATI.cs"
+Get-ChildItem "C:\Users\$env:USERNAME\Documents\NinjaTrader 8\bin\Custom\AddOns" -Filter "ZorroBridge.cs"
 ```
 
 #### 3. Verify Port is Free
