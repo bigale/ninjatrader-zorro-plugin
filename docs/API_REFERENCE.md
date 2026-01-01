@@ -116,7 +116,7 @@ BrokerAsset("MESH26", &price, &spread, &volume, ...);
 ```
 
 **Parameters:**
-- `Asset` - Symbol name (auto-converted: MESH26 ? MES 03-26)
+- `Asset` - Symbol name (auto-converted: MESH26  MES 03-26)
 - `pPrice` - Last/Ask price
 - `pSpread` - Bid-Ask spread
 - `pVolume` - Daily volume
@@ -133,9 +133,9 @@ BrokerAsset("MESH26", &price, &spread, &volume, ...);
 
 **Symbol Conversion:**
 ```
-MESH26    ? MES 03-26
-MES 0326  ? MES 03-26  
-MES 03-26 ? MES 03-26 (no change)
+MESH26     MES 03-26
+MES 0326   MES 03-26  
+MES 03-26  MES 03-26 (no change)
 ```
 
 ---
@@ -445,15 +445,15 @@ Communication between plugin and AddOn uses simple text protocol on localhost:88
 ### Commands
 
 ```
-PING                           ? PONG
-LOGIN:Sim101                   ? OK:Logged in to Sim101
-SUBSCRIBE:MES 03-26            ? OK:Subscribed
-GETPRICE:MES 03-26             ? PRICE:6047.50:6047.25:6047.75:12345
-GETACCOUNT:Sim101              ? ACCOUNT:100000:0:100000
-GETPOSITION:MES 03-26:Sim101   ? POSITION:2:6040.00
-PLACEORDER:...                 ? ORDER:orderId
-CANCELORDER:orderId            ? OK:Cancelled
-LOGOUT                         ? OK:Logged out
+PING                            PONG
+LOGIN:Sim101                    OK:Logged in to Sim101
+SUBSCRIBE:MES 03-26             OK:Subscribed
+GETPRICE:MES 03-26              PRICE:6047.50:6047.25:6047.75:12345
+GETACCOUNT:Sim101               ACCOUNT:100000:0:100000
+GETPOSITION:MES 03-26:Sim101    POSITION:2:6040.00
+PLACEORDER:...                  ORDER:orderId
+CANCELORDER:orderId             OK:Cancelled
+LOGOUT                          OK:Logged out
 ```
 
 ---
@@ -495,11 +495,11 @@ if(priceClose() == 0) {
 
 | Feature | Status | Workaround |
 |---------|--------|------------|
-| Historical bars | ? Not available | Use separate data source |
-| Contract specs | ?? Limited | Configure in asset file |
-| Stop orders | ?? Planned | Use limit orders |
-| OCO orders | ?? Planned | Manual management |
-| Multiple accounts | ?? One at a time | Reconnect to switch |
+| Historical bars |  Not available | Use separate data source |
+| Contract specs |  Limited | Configure in asset file |
+| Stop orders |  Planned | Use limit orders |
+| OCO orders |  Planned | Manual management |
+| Multiple accounts |  One at a time | Reconnect to switch |
 
 ---
 

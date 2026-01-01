@@ -1,205 +1,411 @@
-# ?? NT8 Plugin - Ready to Use!
+# Getting Started with NT8 Zorro Plugin
 
-## ? Build Status
+Quick guide to get trading with the NinjaTrader 8 Zorro Plugin.
 
-**The plugin has been successfully built AND INSTALLED!**
+## Prerequisites
 
-- DLL Location: `build\Release\NT8.dll` (23 KB)
-- Installed to: `C:\Users\bigal\Zorro_2.62\Plugin\NT8.dll` ?
-- Test script: `C:\Users\bigal\Zorro_2.62\Strategy\TestNT8.c` ?
-
----
-
-## ?? What's Included
-
-This project contains:
-
-- ? **NT8.dll** - The Zorro broker plugin for NinjaTrader 8
-- ? **Source Code** - Full C++ implementation with ATI wrapper
-- ? **Build Scripts** - Easy build automation
-- ? **Test Script** - Sample Zorro script to verify functionality
-- ? **Documentation** - Complete setup and usage guides
+Before you begin, ensure you have:
+- Installed the plugin ([Installation Guide](INSTALLATION.md))
+- NinjaTrader 8.1+ running with AddOn active
+- Zorro configured with NT8 account
+- Connected to data feed in NinjaTrader (or using Sim)
 
 ---
 
-## ?? Quick Setup (2 Steps Remaining)
+## Your First Trade Test
 
-### ~~Step 1: Install Prerequisites~~ ?
+### Step 1: Create a Simple Test Script
 
-1. **NinjaTrader 8** - [Download here](https://ninjatrader.com/GetStarted)
-2. **Zorro** - Installed at `C:\Users\bigal\Zorro_2.62`
-
-### ~~Step 2: Copy the Plugin~~ ?
-
-Plugin already copied to: `C:\Users\bigal\Zorro_2.62\Plugin\NT8.dll`
-
-### Step 3: Enable NinjaTrader ATI
-
-1. Open NinjaTrader 8
-2. Go to **Tools ? Options ? Automated Trading Interface**
-3. **Enable** the Automated Trading Interface
-4. Click **OK** and restart NinjaTrader
-
----
-
-## ?? Test the Plugin
-
-1. **~~Copy the test script~~** ? Already done!
-   ```
-   Location: C:\Users\bigal\Zorro_2.62\Strategy\TestNT8.c
-   ```
-
-2. **Edit TestNT8.c** and change:
-   - `"Sim101"` ? Your NinjaTrader account name
-   - `"ES 03-25"` ? An instrument you have data for
-
-3. **Run in Zorro**:
-   - Open Zorro (`C:\Users\bigal\Zorro_2.62\Zorro.exe`)
-   - In the dropdown, select **NT8** as broker
-   - In the script dropdown, select **TestNT8**
-   - Click **Trade**
-
-You should see:
-```
-# NT8 plugin initialized
-# NT8 connected to account: Sim101
-Account Balance: $100000.00
-Margin Available: $100000.00
-ES 03-25 Price: 6047.50  Spread: 0.25
-Current Position: 0
-=== Test Complete ===
-Plugin is working!
-```
-
----
-
-## ?? Creating Your First Strategy
-
-Here's a minimal example:
+Create `FirstTest.c` in `C:\Zorro\Strategy\`:
 
 ```c
-// MyStrategy.c
+// FirstTest.c - Your first NT8 plugin test
 function run()
 {
-    BarPeriod = 60;  // 1 hour bars
-    asset("ES 03-25");
+    BarPeriod = 1;
+    LookBack = 0;  // Live-only, no historical data
     
-    // Your strategy logic here
-    if(crossOver(SMA(12), SMA(24))) {
-        enterLong();
-    } else if(crossUnder(SMA(12), SMA(24))) {
-        enterShort();
+    if(is(INITRUN)) {
+        brokerCommand(SET_DIAGNOSTICS, 1);  // Enable logging
+        printf("\n=== First Test with NT8 ===");
+    }
+    
+    // Set the asset - MES March 2026
+    asset("MESH26");
+    
+    // Display account info
+    printf("\nAccount Balance: $%.2f", Balance);
+    printf("\nCurrent Price: %.2f", priceClose());
+    printf("\nSpread: %.4f", Spread);
+    
+    // Check position
+    int pos = brokerCommand(GET_POSITION, (long)Asset);
+    printf("\nCurrent Position: %d contracts", pos);
+    
+    quit("Test complete!");
+}
+```
+
+### Step 2: Run the Test
+
+1. **Start NinjaTrader**
+   - Connect to data (or use Sim)
+   - Verify Output: `[Zorro ATI] listening on port 8888`
+
+2. **Start Zorro**
+   - Select account: **NT8-Sim**
+   - Select script: **FirstTest**
+   - Click **Trade** (not Test - we want live connection)
+
+3. **Expected Output**:
+   ```
+   === First Test with NT8 ===
+   Account Balance: $100000.00
+   Current Price: 6047.50
+   Spread: 0.2500
+   Current Position: 0 contracts
+   Test complete!
+   ```
+
+---
+
+## Understanding Live-Only Trading
+
+This plugin provides **live trading only** (no historical data):
+
+```c
+// Required for live-only trading
+LookBack = 0;  // Don't request historical bars
+```
+
+**Why?**
+- NinjaTrader's API doesn't expose historical data
+- Focus on live trading with real-time data
+- Use separate data source for backtesting if needed
+
+---
+
+## Symbol Formats
+
+The plugin automatically handles multiple symbol formats:
+
+### Futures Contracts
+
+```c
+// All these work for MES March 2026:
+asset("MESH26");      // Month code format (recommended)
+asset("MES 03-26");   // NinjaTrader direct format
+asset("MES 0326");    // Alternative format
+
+// Month codes:
+// H = March, M = June, U = September, Z = December
+```
+
+### Common Futures Symbols
+
+| Zorro Code | NT8 Format | Description |
+|------------|------------|-------------|
+| MESH26 | MES 03-26 | Micro E-mini S&P March 2026 |
+| ESH26 | ES 03-26 | E-mini S&P March 2026 |
+| MNQH26 | MNQ 03-26 | Micro Nasdaq March 2026 |
+| NQH26 | NQ 03-26 | E-mini Nasdaq March 2026 |
+
+---
+
+## Basic Trading Script
+
+### Simple Moving Average Crossover
+
+```c
+// SMA_Cross.c - Basic trading strategy
+function run()
+{
+    BarPeriod = 60;  // 1-hour bars
+    LookBack = 0;    // Live-only
+    
+    asset("MESH26");
+    
+    // Get current price
+    var price = priceClose();
+    
+    // Check position
+    int pos = brokerCommand(GET_POSITION, (long)Asset);
+    
+    // Simple logic: buy on upticks if flat
+    if(pos == 0 && price > priceClose(1)) {
+        printf("\nBuying 1 contract at %.2f", price);
+        enterLong(1);  // Buy 1 contract
+    }
+    
+    // Exit if have position and price falls
+    if(pos > 0 && price < priceClose(1)) {
+        printf("\nSelling position at %.2f", price);
+        exitLong();
     }
 }
 ```
 
-Run with:
-```
-Zorro -b NT8 script:MyStrategy
-```
+**WARNING**: This is example code only. Test thoroughly with simulation before live trading!
 
 ---
 
-## ??? Rebuilding the Plugin
+## Account Management
 
-If you make changes to the source code:
+### Check Account Status
 
-### Option 1: Simple Batch File
-```batch
-build-simple.bat
+```c
+printf("\nBalance: $%.2f", Balance);
+printf("\nMargin: $%.2f", MarginVal);
 ```
 
-### Option 2: Manual Build
-```batch
-cd build
-cmake --build . --config Release
+### Check Position
+
+```c
+int pos = brokerCommand(GET_POSITION, (long)Asset);
+if(pos > 0)
+    printf("\nLong %d contracts", pos);
+else if(pos < 0)
+    printf("\nShort %d contracts", -pos);
+else
+    printf("\nFlat (no position)");
 ```
 
-### Option 3: Visual Studio
-1. Open `CMakeLists.txt` in Visual Studio 2022
-2. Select **Release | x86** configuration
-3. Build ? Build All
+### Check Average Entry
+
+```c
+if(pos != 0) {
+    var entry = brokerCommand(GET_AVGENTRY, (long)Asset);
+    printf("\nAverage Entry: %.2f", entry);
+    printf("\nCurrent P&L: $%.2f", (priceClose() - entry) * pos * 5);
+}
+```
 
 ---
 
-## ?? Features Supported
+## Order Placement
 
-### ? Implemented
-- Market data subscription (Last, Bid, Ask, Volume)
-- Market orders (BUY/SELL)
-- Limit orders
-- Order tracking and status
-- Position queries
-- Account information (Balance, Buying Power, P&L)
-- NFA-compliant FIFO handling
-- Multiple order types (GTC, IOC, FOK)
+### Market Orders
 
-### ?? Limitations
-- No historical data (use separate data source)
-- No contract specifications (configure in Zorro asset file)
-- ATM strategies require manual setup in NT8
-- One account at a time
+```c
+// Buy 1 contract at market
+enterLong(1);
 
----
+// Sell 1 contract at market
+enterShort(1);
 
-## ?? Troubleshooting
+// Close position
+if(pos > 0)
+    exitLong();   // Close long
+else if(pos < 0)
+    exitShort();  // Close short
+```
 
-### "Failed to load NtDirect.dll"
-**Solution**: 
-- Ensure NinjaTrader 8 is installed
-- Check `C:\Windows\SysWOW64\NtDirect.dll` exists
-- Run Zorro as Administrator
+### Limit Orders
 
-### "Cannot connect to NinjaTrader"
-**Solution**:
-- Start NinjaTrader 8
-- Enable ATI: Tools ? Options ? Automated Trading Interface
-- Check no firewall is blocking local connections
+```c
+// Buy limit at 6000.00
+OrderLimit = 6000.00;
+enterLong(1);
 
-### "Order placement failed"
-**Solution**:
-- Verify account name is correct
-- Check sufficient buying power
-- Ensure market is open
-- Verify symbol format matches NinjaTrader (e.g., "ES 03-25")
-
-### "No price data"
-**Solution**:
-- Connect to a data feed in NinjaTrader 8
-- Subscribe to the instrument in NT8 first
-- Wait a few seconds after subscribing
+// Sell limit at 6100.00
+OrderLimit = 6100.00;
+exitLong();
+```
 
 ---
 
-## ?? Additional Resources
+## Real-Time Data Access
 
-- **Main README**: [README.md](README.md) - Complete documentation
-- **Build Guide**: [BUILD.md](BUILD.md) - Detailed build instructions
-- **NinjaTrader ATI Docs**: https://ninjatrader.com/support/helpGuides/nt8/functions.htm
-- **Zorro Manual**: https://zorro-project.com/manual/
+### Price Data
+
+```c
+var last = priceClose();      // Last traded price
+var bid = last - Spread/2;    // Approximate bid
+var ask = last + Spread/2;    // Approximate ask
+```
+
+### Market State
+
+```c
+// Check if we have data
+if(priceClose() > 0) {
+    printf("\nMarket data available");
+    printf("\nPrice: %.2f", priceClose());
+} else {
+    printf("\nNo market data yet");
+}
+```
 
 ---
 
-## ?? Contributing
+## Best Practices
 
-Pull requests are welcome! Please ensure:
-- Code compiles as 32-bit (Win32)
-- Test with the TradeTest script
-- Test with both Sim and live accounts (if possible)
+### 1. Always Use Simulation First
+
+```c
+// In accounts.csv, use:
+NT8-Sim,Sim101,,Demo
+
+// NOT your live account initially!
+```
+
+### 2. Enable Diagnostics
+
+```c
+if(is(INITRUN)) {
+    brokerCommand(SET_DIAGNOSTICS, 1);
+}
+```
+
+### 3. Check Connection
+
+```c
+if(is(INITRUN)) {
+    if(!Live) {
+        printf("\nNot connected to broker!");
+        quit("Connection failed");
+    }
+}
+```
+
+### 4. Handle Market Hours
+
+```c
+// Markets closed message will appear automatically
+// Your script stops when market closes
+```
+
+### 5. Start Small
+
+```c
+// Test with 1 contract first
+enterLong(1);  // NOT enterLong(10) initially!
+```
 
 ---
 
-## ?? License
+## Common Patterns
 
-MIT License - See LICENSE file
+### Buy and Hold
+
+```c
+function run()
+{
+    BarPeriod = 1;
+    LookBack = 0;
+    
+    asset("MESH26");
+    
+    // Buy once at start
+    if(is(INITRUN)) {
+        enterLong(1);
+    }
+    
+    // Monitor position
+    int pos = brokerCommand(GET_POSITION, (long)Asset);
+    printf("\nPosition: %d", pos);
+}
+```
+
+### Scalping
+
+```c
+function run()
+{
+    BarPeriod = 1;  // 1-minute bars
+    LookBack = 0;
+    
+    asset("MESH26");
+    
+    var price = priceClose();
+    int pos = brokerCommand(GET_POSITION, (long)Asset);
+    
+    // Enter on specific conditions
+    if(pos == 0 && <your_entry_condition>) {
+        enterLong(1);
+    }
+    
+    // Quick exit on target or stop
+    if(pos > 0) {
+        var entry = brokerCommand(GET_AVGENTRY, (long)Asset);
+        var profit = (price - entry) * 5;  // MES = $5/point
+        
+        if(profit >= 25 || profit <= -12.50) {  // $25 target, $12.50 stop
+            exitLong();
+        }
+    }
+}
+```
 
 ---
 
-## ? Next Steps
+## Debugging Tips
 
-1. ? Build complete - Plugin is ready!
-2. ?? Copy NT8.dll to Zorro\Plugin\
-3. ?? Run TestNT8.c to verify
-4. ?? Start building your trading strategy!
+### Check Connection
 
-Happy trading! ??
+```c
+if(is(INITRUN)) {
+    printf("\n--- Connection Check ---");
+    printf("\nLive: %d", Live);
+    printf("\nConnection: %s", Live ? "OK" : "FAILED");
+}
+```
+
+### Monitor Orders
+
+```c
+// Zorro will log order placement automatically
+// Watch Zorro message window for:
+// "# Order 1000 (ID): BUY 1 MESH26 @ MARKET"
+```
+
+### View Detailed Logs
+
+- **Zorro logs**: `C:\Zorro\Log\<ScriptName>_demo.log`
+- **NinjaTrader logs**: Check Output window
+  - Shows: connections, orders, fills
+
+---
+
+## Next Steps
+
+1. Run FirstTest.c successfully
+2. Understand live-only trading
+3. Test basic order placement (sim account!)
+4. Monitor positions and P&L
+5. Read [API Reference](API_REFERENCE.md)
+6. Build your strategy
+7. Test extensively in simulation
+8. Go live (start small!)
+
+---
+
+## Quick Reference Card
+
+```c
+// Essential commands:
+BarPeriod = 1;              // Bar period in minutes
+LookBack = 0;               // Live-only (no historical)
+asset("MESH26");            // Select asset
+
+Balance                     // Account balance
+MarginVal                   // Available margin
+priceClose()               // Current price
+Spread                     // Bid-ask spread
+
+enterLong(n)               // Buy n contracts
+enterShort(n)              // Sell n contracts
+exitLong()                 // Close long position
+exitShort()                // Close short position
+
+// Broker commands:
+brokerCommand(GET_POSITION, (long)Asset)   // Get position
+brokerCommand(GET_AVGENTRY, (long)Asset)   // Get avg entry
+brokerCommand(SET_DIAGNOSTICS, 1)          // Enable logging
+```
+
+---
+
+**Ready to trade?** Make sure you've tested thoroughly with simulation accounts before going live!
+
+For detailed API documentation, see [API Reference](API_REFERENCE.md).
