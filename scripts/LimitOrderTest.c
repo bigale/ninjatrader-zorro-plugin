@@ -63,8 +63,8 @@ function run()
 		case 0:
 			if(priceClose() > 0 && Spread > 0) {
 				printf("\n[PHASE 0] Market data ready");
-				printf("\n  Price: %.2f | Bid: %.2f | Ask: %.2f | Spread: %.2f",
-					priceClose(), priceBid(), priceAsk(), Spread);
+				printf("\n  Price: %.2f | Spread: %.2f",
+					priceClose(), Spread);
 				g_TestPhase = 1;
 			} else {
 				printf("\n[PHASE 0] Waiting for market data...");
@@ -77,11 +77,11 @@ function run()
 			printf("\n[TEST 1] LONG Limit Order (below market)");
 			printf("\n========================================");
 			
-			// Set limit 2 ticks below bid
-			g_LimitPrice = priceBid() - 2*PIP;
+			// Set limit 2 ticks below current price
+			g_LimitPrice = priceClose() - 2*PIP;
 			
-			printf("\n  Current Bid: %.2f", priceBid());
-			printf("\n  Limit Price: %.2f (%.2f below)", g_LimitPrice, priceBid() - g_LimitPrice);
+			printf("\n  Current Price: %.2f", priceClose());
+			printf("\n  Limit Price: %.2f (%.2f below)", g_LimitPrice, priceClose() - g_LimitPrice);
 			printf("\n  Expected: Order pending until price drops");
 			
 			// Place limit order
@@ -166,11 +166,11 @@ function run()
 			printf("\n[TEST 3] SHORT Limit Order (above market)");
 			printf("\n========================================");
 			
-			// Set limit 2 ticks above ask
-			g_LimitPrice = priceAsk() + 2*PIP;
+			// Set limit 2 ticks above current price
+			g_LimitPrice = priceClose() + 2*PIP;
 			
-			printf("\n  Current Ask: %.2f", priceAsk());
-			printf("\n  Limit Price: %.2f (%.2f above)", g_LimitPrice, g_LimitPrice - priceAsk());
+			printf("\n  Current Price: %.2f", priceClose());
+			printf("\n  Limit Price: %.2f (%.2f above)", g_LimitPrice, g_LimitPrice - priceClose());
 			printf("\n  Expected: Order pending until price rises");
 			
 			// Place limit order
