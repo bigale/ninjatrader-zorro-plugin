@@ -18,6 +18,16 @@ using NinjaTrader.NinjaScript;
 
 namespace NinjaTrader.NinjaScript.AddOns
 {
+    // Logging levels
+    public enum LogLevel
+    {
+        TRACE = 0,   // Every call, every detail
+        DEBUG = 1,   // Important operations and their results
+        INFO = 2,    // Heartbeat and significant events only
+        WARN = 3,    // Warnings and errors
+        ERROR = 4    // Errors only
+    }
+    
     public class ZorroBridge : AddOnBase
     {
         private TcpListener tcpListener;
@@ -28,7 +38,13 @@ namespace NinjaTrader.NinjaScript.AddOns
         private Account currentAccount;
         private Dictionary<string, Instrument> subscribedInstruments = new Dictionary<string, Instrument>();
         private List<Order> activeOrders = new List<Order>();
-
+        
+        // Logging configuration
+        private LogLevel currentLogLevel = LogLevel.INFO;  // Default to INFO
+        private DateTime lastHeartbeat = DateTime.MinValue;
+        private int priceRequestCount = 0;
+        private int orderCount = 0;
+        
         protected override void OnStateChange()
         {
             if (State == State.SetDefaults)
@@ -38,15 +54,44 @@ namespace NinjaTrader.NinjaScript.AddOns
             }
             else if (State == State.Configure)
             {
-                // Start the TCP server as soon as the AddOn is configured
-                // This happens at NinjaTrader startup, no need to wait for Realtime
-                LogMessage("Zorro Bridge starting...");
+                Log(LogLevel.INFO, "Zorro Bridge starting...");
                 StartTcpServer();
             }
             else if (State == State.Terminated)
             {
-                LogMessage("Zorro Bridge stopping...");
+                Log(LogLevel.INFO, "Zorro Bridge stopping...");
                 StopTcpServer();
+            }
+        }
+        
+        // Centralized logging method
+        private void Log(LogLevel level, string message)
+        {
+            if (level < currentLogLevel)
+                return;
+                
+            string prefix = "";
+            switch (level)
+            {
+                case LogLevel.TRACE: prefix = "[TRACE]"; break;
+                case LogLevel.DEBUG: prefix = "[DEBUG]"; break;
+                case LogLevel.INFO:  prefix = "[INFO]"; break;
+                case LogLevel.WARN:  prefix = "[WARN]"; break;
+                case LogLevel.ERROR: prefix = "[ERROR]"; break;
+            }
+            
+            Print($"[Zorro Bridge] {prefix} {message}");
+        }
+        
+        // Heartbeat logging - only logs periodically
+        private void Heartbeat()
+        {
+            TimeSpan elapsed = DateTime.Now - lastHeartbeat;
+            if (elapsed.TotalSeconds >= 10)
+            {
+                Log(LogLevel.INFO, $"Status OK | Prices:{priceRequestCount} Orders:{orderCount} Instruments:{subscribedInstruments.Count}");
+                lastHeartbeat = DateTime.Now;
+                priceRequestCount = 0;
             }
         }
 
@@ -62,11 +107,12 @@ namespace NinjaTrader.NinjaScript.AddOns
                 listenerThread.IsBackground = true;
                 listenerThread.Start();
                 
-                LogMessage($"Zorro Bridge listening on port {PORT}");
+                Log(LogLevel.INFO, $"Listening on port {PORT}");
+                lastHeartbeat = DateTime.Now;
             }
             catch (Exception ex)
             {
-                LogMessage($"Error starting TCP server: {ex.Message}");
+                Log(LogLevel.ERROR, $"Failed to start TCP server: {ex.Message}");
             }
         }
 
@@ -92,18 +138,18 @@ namespace NinjaTrader.NinjaScript.AddOns
                 try
                 {
                     TcpClient client = tcpListener.AcceptTcpClient();
+                    Log(LogLevel.DEBUG, "Client connected");
                     Thread clientThread = new Thread(HandleClient);
                     clientThread.IsBackground = true;
                     clientThread.Start(client);
                 }
                 catch (SocketException)
                 {
-                    // Server stopped
                     break;
                 }
                 catch (Exception ex)
                 {
-                    LogMessage($"Error accepting client: {ex.Message}");
+                    Log(LogLevel.ERROR, $"Error accepting client: {ex.Message}");
                 }
             }
         }
@@ -124,7 +170,11 @@ namespace NinjaTrader.NinjaScript.AddOns
                         if (bytesRead == 0) break;
                         
                         string request = Encoding.UTF8.GetString(buffer, 0, bytesRead).Trim();
+                        Log(LogLevel.TRACE, $"<< {request}");
+                        
                         string response = ProcessCommand(request);
+                        
+                        Log(LogLevel.TRACE, $">> {response}");
                         
                         byte[] responseBytes = Encoding.UTF8.GetBytes(response + "\n");
                         stream.Write(responseBytes, 0, responseBytes.Length);
@@ -134,10 +184,11 @@ namespace NinjaTrader.NinjaScript.AddOns
             }
             catch (Exception ex)
             {
-                LogMessage($"Error handling client: {ex.Message}");
+                Log(LogLevel.ERROR, $"Error handling client: {ex.Message}");
             }
             finally
             {
+                Log(LogLevel.DEBUG, "Client disconnected");
                 client.Close();
             }
         }
@@ -186,6 +237,9 @@ namespace NinjaTrader.NinjaScript.AddOns
 
                     case "CANCELORDER":
                         return HandleCancelOrder(parts);
+                    
+                    case "SETLOGLEVEL":
+                        return HandleSetLogLevel(parts);
 
                     default:
                         return $"ERROR:Unknown command: {cmd}";
@@ -206,9 +260,12 @@ namespace NinjaTrader.NinjaScript.AddOns
             currentAccount = Account.All.FirstOrDefault(a => a.Name == accountName);
 
             if (currentAccount == null)
+            {
+                Log(LogLevel.ERROR, $"Account '{accountName}' not found");
                 return $"ERROR:Account '{accountName}' not found";
+            }
 
-            LogMessage($"Logged in to account: {accountName}");
+            Log(LogLevel.INFO, $"Logged in to account: {accountName}");
             return $"OK:Logged in to {accountName}";
         }
 
@@ -216,7 +273,7 @@ namespace NinjaTrader.NinjaScript.AddOns
         {
             if (currentAccount != null)
             {
-                LogMessage($"Logged out from account: {currentAccount.Name}");
+                Log(LogLevel.INFO, $"Logged out from: {currentAccount.Name}");
                 currentAccount = null;
             }
             subscribedInstruments.Clear();
@@ -232,34 +289,24 @@ namespace NinjaTrader.NinjaScript.AddOns
             string nt8Symbol = ConvertToNT8Symbol(zorroSymbol);
             
             if (nt8Symbol != zorroSymbol)
-            {
-                Print($"[Zorro Bridge] Converted symbol: {zorroSymbol} -> {nt8Symbol}");
-            }
+                Log(LogLevel.DEBUG, $"Converted: {zorroSymbol} -> {nt8Symbol}");
             
             Instrument instrument = Instrument.GetInstrument(nt8Symbol);
             if (instrument == null)
             {
-                Print($"[Zorro Bridge] ERROR: Instrument.GetInstrument returned null for '{nt8Symbol}'");
-                Print($"[Zorro Bridge] NinjaTrader does not recognize this instrument");
-                Print($"[Zorro Bridge] Make sure the instrument exists and is spelled correctly in NT8");
+                Log(LogLevel.ERROR, $"Instrument '{nt8Symbol}' not found");
                 return $"ERROR:Instrument '{nt8Symbol}' not found in NinjaTrader";
             }
 
-            Print($"[Zorro Bridge] Instrument found: {instrument.FullName}");
+            Log(LogLevel.TRACE, $"Found: {instrument.FullName}");
             
-            // Check if market data is available
             if (instrument.MarketData == null)
             {
-                Print($"[Zorro Bridge] WARNING: MarketData is null for {nt8Symbol}");
-                Print($"[Zorro Bridge] You may need to connect to a data feed in NinjaTrader");
-            }
-            else
-            {
-                Print($"[Zorro Bridge] MarketData available for {nt8Symbol}");
+                Log(LogLevel.WARN, $"MarketData is null for {nt8Symbol} - connect to data feed");
             }
 
             subscribedInstruments[zorroSymbol] = instrument;
-            Print($"[Zorro Bridge] Subscribed to {nt8Symbol}");
+            Log(LogLevel.INFO, $"Subscribed to {nt8Symbol}");
             
             return $"OK:Subscribed to {nt8Symbol}";
         }
@@ -339,16 +386,11 @@ namespace NinjaTrader.NinjaScript.AddOns
 
             string zorroSymbol = parts[1];
             
-            Print($"[Zorro Bridge] HandleGetPrice called for: {zorroSymbol}");
+            Log(LogLevel.TRACE, $"GetPrice: {zorroSymbol}");
             
             if (!subscribedInstruments.ContainsKey(zorroSymbol))
             {
-                Print($"[Zorro Bridge] ERROR: Not subscribed to {zorroSymbol}");
-                Print($"[Zorro Bridge] Subscribed instruments count: {subscribedInstruments.Count}");
-                foreach (var key in subscribedInstruments.Keys)
-                {
-                    Print($"[Zorro Bridge] - Subscribed: {key}");
-                }
+                Log(LogLevel.ERROR, $"Not subscribed to {zorroSymbol}");
                 return "ERROR:Not subscribed to instrument";
             }
 
@@ -356,7 +398,7 @@ namespace NinjaTrader.NinjaScript.AddOns
             
             if (instrument == null)
             {
-                Print($"[Zorro Bridge] ERROR: Instrument is null for {zorroSymbol}");
+                Log(LogLevel.ERROR, $"Instrument is null for {zorroSymbol}");
                 return "ERROR:Instrument is null";
             }
             
@@ -369,32 +411,27 @@ namespace NinjaTrader.NinjaScript.AddOns
                 
                 if (instrument.MarketData.Last != null)
                     last = instrument.MarketData.Last.Price;
-                else
-                    Print($"[Zorro Bridge] WARNING: Last is null");
                     
                 if (instrument.MarketData.Bid != null)
                     bid = instrument.MarketData.Bid.Price;
-                else
-                    Print($"[Zorro Bridge] WARNING: Bid is null");
                     
                 if (instrument.MarketData.Ask != null)
                     ask = instrument.MarketData.Ask.Price;
-                else
-                    Print($"[Zorro Bridge] WARNING: Ask is null");
                     
                 if (instrument.MarketData.DailyVolume != null)
                     volume = instrument.MarketData.DailyVolume.Volume;
-                else
-                    Print($"[Zorro Bridge] WARNING: DailyVolume is null");
 
-                Print($"[Zorro Bridge] Returning price - Last:{last} Bid:{bid} Ask:{ask} Vol:{volume}");
+                priceRequestCount++;
+                Heartbeat();  // Check if we should log heartbeat
+                
+                Log(LogLevel.DEBUG, $"Price {zorroSymbol}: L:{last} B:{bid} A:{ask}");
+                Log(LogLevel.TRACE, $"Volume: {volume}");
 
                 return $"PRICE:{last}:{bid}:{ask}:{volume}";
             }
             catch (Exception ex)
             {
-                Print($"[Zorro Bridge] ERROR getting price data: {ex.Message}");
-                Print($"[Zorro Bridge] Stack trace: {ex.StackTrace}");
+                Log(LogLevel.ERROR, $"Error getting price: {ex.Message}");
                 return $"ERROR:{ex.Message}";
             }
         }
@@ -447,20 +484,18 @@ namespace NinjaTrader.NinjaScript.AddOns
         private string HandlePlaceOrder(string[] parts)
         {
             // PLACEORDER:BUY/SELL:INSTRUMENT:QUANTITY:MARKET/LIMIT:PRICE
-            Print($"[Zorro Bridge] ==== HandlePlaceOrder START ====");
-            Print($"[Zorro Bridge] Received: {string.Join(":", parts)}");
+            Log(LogLevel.DEBUG, "==== PlaceOrder START ====");
+            Log(LogLevel.TRACE, $"Raw: {string.Join(":", parts)}");
             
             if (currentAccount == null)
             {
-                Print($"[Zorro Bridge] ERROR: Not logged in (currentAccount is null)");
+                Log(LogLevel.ERROR, "Not logged in");
                 return "ERROR:Not logged in";
             }
-
-            Print($"[Zorro Bridge] Account: {currentAccount.Name}");
             
             if (parts.Length < 5)
             {
-                Print($"[Zorro Bridge] ERROR: Not enough parts. Expected >=5, got {parts.Length}");
+                Log(LogLevel.ERROR, $"Invalid format (expected >=5 parts, got {parts.Length})");
                 return "ERROR:Invalid order format";
             }
 
@@ -472,36 +507,26 @@ namespace NinjaTrader.NinjaScript.AddOns
                 string orderType = parts[4].ToUpper();
                 double limitPrice = parts.Length > 5 ? double.Parse(parts[5]) : 0;
 
-                Print($"[Zorro Bridge] Parsed order:");
-                Print($"  Action: {action}");
-                Print($"  Symbol (Zorro): {zorroSymbol}");
-                Print($"  Quantity: {quantity}");
-                Print($"  OrderType: {orderType}");
-                Print($"  LimitPrice: {limitPrice}");
+                Log(LogLevel.DEBUG, $"Order: {action} {quantity} {zorroSymbol} @ {orderType}");
+                if (limitPrice > 0)
+                    Log(LogLevel.DEBUG, $"Limit: {limitPrice}");
 
                 string nt8Symbol = ConvertToNT8Symbol(zorroSymbol);
-                Print($"  Symbol (NT8): {nt8Symbol}");
+                if (nt8Symbol != zorroSymbol)
+                    Log(LogLevel.TRACE, $"Converted: {zorroSymbol} -> {nt8Symbol}");
 
                 Instrument instrument = Instrument.GetInstrument(nt8Symbol);
                 if (instrument == null)
                 {
-                    Print($"[Zorro Bridge] ERROR: Instrument '{nt8Symbol}' not found");
+                    Log(LogLevel.ERROR, $"Instrument '{nt8Symbol}' not found");
                     return "ERROR:Instrument not found";
                 }
                 
-                Print($"[Zorro Bridge] Instrument found: {instrument.FullName}");
-                Print($"[Zorro Bridge] Creating order...");
+                Log(LogLevel.TRACE, $"Instrument: {instrument.FullName}");
 
                 OrderAction orderAction = action == "BUY" ? OrderAction.Buy : OrderAction.Sell;
                 OrderType nt8OrderType = orderType == "LIMIT" ? OrderType.Limit : OrderType.Market;
-                
-                Print($"[Zorro Bridge] Order params:");
-                Print($"  OrderAction: {orderAction}");
-                Print($"  OrderType: {nt8OrderType}");
-                Print($"  Quantity: {quantity}");
-                Print($"  Limit: {limitPrice}");
 
-                // CreateOrder with correct parameter count for NT8 8.1
                 Order order = currentAccount.CreateOrder(
                     instrument,
                     orderAction,
@@ -510,36 +535,29 @@ namespace NinjaTrader.NinjaScript.AddOns
                     TimeInForce.Day,
                     quantity,
                     limitPrice,
-                    0,  // stop price
-                    "",  // OCO
-                    "Zorro",  // order name
-                    DateTime.MaxValue,  // GTD time
-                    null  // on order update
+                    0,
+                    "",
+                    "Zorro",
+                    DateTime.MaxValue,
+                    null
                 );
 
-                Print($"[Zorro Bridge] Order created: {order.OrderId}");
-                Print($"[Zorro Bridge] Order state: {order.OrderState}");
-                Print($"[Zorro Bridge] Submitting to account...");
+                Log(LogLevel.TRACE, $"Created order: {order.OrderId}");
                 
                 currentAccount.Submit(new[] { order });
                 
-                Print($"[Zorro Bridge] Order submitted");
-                Print($"[Zorro Bridge] Order state after submit: {order.OrderState}");
+                Log(LogLevel.INFO, $"ORDER PLACED: {action} {quantity} {zorroSymbol} (ID:{order.OrderId})");
                 
                 activeOrders.Add(order);
+                orderCount++;
                 
-                Print($"[Zorro Bridge] ==== HandlePlaceOrder SUCCESS ====");
+                Log(LogLevel.DEBUG, "==== PlaceOrder SUCCESS ====");
                 return $"ORDER:{order.OrderId}";
             }
             catch (Exception ex)
             {
-                Print($"[Zorro Bridge] ==== HandlePlaceOrder EXCEPTION ====");
-                Print($"[Zorro Bridge] Exception: {ex.Message}");
-                Print($"[Zorro Bridge] Stack trace: {ex.StackTrace}");
-                if (ex.InnerException != null)
-                {
-                    Print($"[Zorro Bridge] Inner exception: {ex.InnerException.Message}");
-                }
+                Log(LogLevel.ERROR, $"PlaceOrder failed: {ex.Message}");
+                Log(LogLevel.TRACE, $"Stack: {ex.StackTrace}");
                 return $"ERROR:{ex.Message}";
             }
         }
@@ -559,13 +577,31 @@ namespace NinjaTrader.NinjaScript.AddOns
                 return "ERROR:Order not found";
 
             currentAccount.Cancel(new[] { order });
+            Log(LogLevel.INFO, $"ORDER CANCELLED: {orderId}");
             return $"OK:Order {orderId} cancelled";
         }
-
-        private void LogMessage(string message)
+        
+        private string HandleSetLogLevel(string[] parts)
         {
-            // NT8 8.1 uses Print instead of Output.Process
-            Print($"[Zorro Bridge] {message}");
+            // SETLOGLEVEL:TRACE/DEBUG/INFO/WARN/ERROR
+            if (parts.Length < 2)
+                return "ERROR:Log level required (TRACE/DEBUG/INFO/WARN/ERROR)";
+            
+            string levelStr = parts[1].ToUpper();
+            
+            try
+            {
+                LogLevel newLevel = (LogLevel)Enum.Parse(typeof(LogLevel), levelStr);
+                LogLevel oldLevel = currentLogLevel;
+                currentLogLevel = newLevel;
+                
+                Log(LogLevel.INFO, $"Log level changed: {oldLevel} -> {newLevel}");
+                return $"OK:Log level set to {newLevel}";
+            }
+            catch
+            {
+                return $"ERROR:Invalid log level '{levelStr}'. Use: TRACE/DEBUG/INFO/WARN/ERROR";
+            }
         }
     }
 }
