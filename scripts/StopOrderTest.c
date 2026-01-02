@@ -83,10 +83,16 @@ function run()
 			printf("\n  PIP size: %.2f", PIP);
 			printf("\n  Expected: Order pending until price rises to stop");
 			
-			// Place buy stop order using Stop global variable
-			Stop = g_StopPrice - priceClose();  // Distance from current price
+			// Calculate stop distance
+			var stopDist = g_StopPrice - priceClose();
+			printf("\n  Stop Distance: %.2f", stopDist);
+			
+			// Place buy stop order - DON'T clear Stop before enterLong!
+			Stop = stopDist;
+			printf("\n  Setting Stop = %.2f before enterLong()", Stop);
 			g_LastTradeID = enterLong();
-			Stop = 0;  // Clear for next order
+			printf("\n  enterLong() returned ID:%d", g_LastTradeID);
+			Stop = 0;  // Clear AFTER order placement
 			
 			if(g_LastTradeID > 0) {
 				printf("\n  [PASS] Order placed ID:%d", g_LastTradeID);
@@ -178,10 +184,16 @@ function run()
 			printf("\n  Stop Price: %.2f (%.2f below)", g_StopPrice, priceClose() - g_StopPrice);
 			printf("\n  Expected: Order pending until price falls to stop");
 			
-			// Place sell stop order
-			Stop = priceClose() - g_StopPrice;  // Distance from current price
+			// Calculate stop distance
+			var stopDist = priceClose() - g_StopPrice;
+			printf("\n  Stop Distance: %.2f", stopDist);
+			
+			// Place sell stop order - DON'T clear Stop before enterShort!
+			Stop = stopDist;
+			printf("\n  Setting Stop = %.2f before enterShort()", Stop);
 			g_LastTradeID = enterShort();
-			Stop = 0;
+			printf("\n  enterShort() returned ID:%d", g_LastTradeID);
+			Stop = 0;  // Clear AFTER order placement
 			
 			if(g_LastTradeID > 0) {
 				printf("\n  [PASS] Order placed ID:%d", g_LastTradeID);
