@@ -312,7 +312,19 @@ int TcpBridge::Command(const char* command, const char* account, const char* ins
         cmd << "PLACEORDER:" << action << ":" << instrument << ":" << quantity 
             << ":" << orderType << ":" << limitPrice;
         
+        // Debug logging
+        printf("[TcpBridge] Sending order command: %s\n", cmd.str().c_str());
+        printf("[TcpBridge] Details:\n");
+        printf("  Action: %s\n", action);
+        printf("  Instrument: %s\n", instrument);
+        printf("  Quantity: %d\n", quantity);
+        printf("  OrderType: %s\n", orderType);
+        printf("  LimitPrice: %.2f\n", limitPrice);
+        
         std::string response = SendCommand(cmd.str());
+        
+        printf("[TcpBridge] Response: %s\n", response.c_str());
+        
         return (response.find("ORDER:") != std::string::npos) ? 0 : -1;
     }
     else if (strcmp(command, "CANCEL") == 0) {

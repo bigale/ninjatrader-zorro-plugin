@@ -323,7 +323,12 @@ DLLFUNC int BrokerAccount(char* Account, double* pBalance, double* pTradeVal,
 DLLFUNC int BrokerBuy2(char* Asset, int Amount, double StopDist, double Limit,
     double* pPrice, int* pFill)
 {
+    LogMessage("# [BrokerBuy2] Called with Asset=%s, Amount=%d, Limit=%.2f", 
+        Asset ? Asset : "NULL", Amount, Limit);
+    
     if (!g_bridge || !g_connected || !Asset || Amount == 0) {
+        LogError("[BrokerBuy2] Pre-check failed: bridge=%p, connected=%d, Asset=%s, Amount=%d",
+            g_bridge, g_connected, Asset ? Asset : "NULL", Amount);
         return 0;
     }
     
@@ -341,6 +346,9 @@ DLLFUNC int BrokerBuy2(char* Asset, int Amount, double StopDist, double Limit,
         limitPrice = Limit;
     }
     
+    LogMessage("# [BrokerBuy2] Order params: %s %d %s @ %s (limit=%.2f)",
+        action, quantity, Asset, orderType, limitPrice);
+    
     // Get a new order ID from NinjaTrader
     const char* ntOrderId = g_bridge->NewOrderId();
     if (!ntOrderId || !*ntOrderId) {
@@ -350,11 +358,14 @@ DLLFUNC int BrokerBuy2(char* Asset, int Amount, double StopDist, double Limit,
     
     // Copy order ID (NT returns pointer to static buffer)
     std::string orderId = ntOrderId;
+    LogMessage("# [BrokerBuy2] Generated order ID: %s", orderId.c_str());
     
     // Get time in force
     const char* tif = GetTimeInForce(g_orderType);
+    LogMessage("# [BrokerBuy2] Time in force: %s", tif);
     
     // Place the order
+    LogMessage("# [BrokerBuy2] Calling Command(PLACE)...");
     int result = g_bridge->Command(
         "PLACE",
         g_account.c_str(),
@@ -371,11 +382,15 @@ DLLFUNC int BrokerBuy2(char* Asset, int Amount, double StopDist, double Limit,
         ""            // Strategy Name
     );
     
+    LogMessage("# [BrokerBuy2] Command returned: %d", result);
+    
     if (result != 0) {
-        LogError("Order placement failed: %s %d %s @ %s",
-            action, quantity, Asset, orderType);
+        LogError("Order placement failed: %s %d %s @ %s (result=%d)",
+            action, quantity, Asset, orderType, result);
         return 0;
     }
+    
+    LogMessage("# [BrokerBuy2] Order placed successfully!");
     
     // Create order tracking info
     OrderInfo info;
@@ -398,6 +413,7 @@ DLLFUNC int BrokerBuy2(char* Asset, int Amount, double StopDist, double Limit,
     
     // For market orders, wait briefly for fill
     if (strcmp(orderType, "MARKET") == 0) {
+        LogMessage("# [BrokerBuy2] Waiting for market order fill...");
         for (int i = 0; i < 10; i++) {
             Sleep(100);
             
@@ -422,6 +438,7 @@ DLLFUNC int BrokerBuy2(char* Asset, int Amount, double StopDist, double Limit,
         }
     }
     
+    LogMessage("# [BrokerBuy2] Returning order ID: %d", numericId);
     return numericId;
 }
 

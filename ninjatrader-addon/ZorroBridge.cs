@@ -447,11 +447,22 @@ namespace NinjaTrader.NinjaScript.AddOns
         private string HandlePlaceOrder(string[] parts)
         {
             // PLACEORDER:BUY/SELL:INSTRUMENT:QUANTITY:MARKET/LIMIT:PRICE
+            Print($"[Zorro Bridge] ==== HandlePlaceOrder START ====");
+            Print($"[Zorro Bridge] Received: {string.Join(":", parts)}");
+            
             if (currentAccount == null)
+            {
+                Print($"[Zorro Bridge] ERROR: Not logged in (currentAccount is null)");
                 return "ERROR:Not logged in";
+            }
 
+            Print($"[Zorro Bridge] Account: {currentAccount.Name}");
+            
             if (parts.Length < 5)
+            {
+                Print($"[Zorro Bridge] ERROR: Not enough parts. Expected >=5, got {parts.Length}");
                 return "ERROR:Invalid order format";
+            }
 
             try
             {
@@ -461,17 +472,40 @@ namespace NinjaTrader.NinjaScript.AddOns
                 string orderType = parts[4].ToUpper();
                 double limitPrice = parts.Length > 5 ? double.Parse(parts[5]) : 0;
 
+                Print($"[Zorro Bridge] Parsed order:");
+                Print($"  Action: {action}");
+                Print($"  Symbol (Zorro): {zorroSymbol}");
+                Print($"  Quantity: {quantity}");
+                Print($"  OrderType: {orderType}");
+                Print($"  LimitPrice: {limitPrice}");
+
                 string nt8Symbol = ConvertToNT8Symbol(zorroSymbol);
+                Print($"  Symbol (NT8): {nt8Symbol}");
 
                 Instrument instrument = Instrument.GetInstrument(nt8Symbol);
                 if (instrument == null)
+                {
+                    Print($"[Zorro Bridge] ERROR: Instrument '{nt8Symbol}' not found");
                     return "ERROR:Instrument not found";
+                }
+                
+                Print($"[Zorro Bridge] Instrument found: {instrument.FullName}");
+                Print($"[Zorro Bridge] Creating order...");
+
+                OrderAction orderAction = action == "BUY" ? OrderAction.Buy : OrderAction.Sell;
+                OrderType nt8OrderType = orderType == "LIMIT" ? OrderType.Limit : OrderType.Market;
+                
+                Print($"[Zorro Bridge] Order params:");
+                Print($"  OrderAction: {orderAction}");
+                Print($"  OrderType: {nt8OrderType}");
+                Print($"  Quantity: {quantity}");
+                Print($"  Limit: {limitPrice}");
 
                 // CreateOrder with correct parameter count for NT8 8.1
                 Order order = currentAccount.CreateOrder(
                     instrument,
-                    action == "BUY" ? OrderAction.Buy : OrderAction.Sell,
-                    orderType == "LIMIT" ? OrderType.Limit : OrderType.Market,
+                    orderAction,
+                    nt8OrderType,
                     OrderEntry.Manual,
                     TimeInForce.Day,
                     quantity,
@@ -483,13 +517,29 @@ namespace NinjaTrader.NinjaScript.AddOns
                     null  // on order update
                 );
 
+                Print($"[Zorro Bridge] Order created: {order.OrderId}");
+                Print($"[Zorro Bridge] Order state: {order.OrderState}");
+                Print($"[Zorro Bridge] Submitting to account...");
+                
                 currentAccount.Submit(new[] { order });
+                
+                Print($"[Zorro Bridge] Order submitted");
+                Print($"[Zorro Bridge] Order state after submit: {order.OrderState}");
+                
                 activeOrders.Add(order);
-
+                
+                Print($"[Zorro Bridge] ==== HandlePlaceOrder SUCCESS ====");
                 return $"ORDER:{order.OrderId}";
             }
             catch (Exception ex)
             {
+                Print($"[Zorro Bridge] ==== HandlePlaceOrder EXCEPTION ====");
+                Print($"[Zorro Bridge] Exception: {ex.Message}");
+                Print($"[Zorro Bridge] Stack trace: {ex.StackTrace}");
+                if (ex.InnerException != null)
+                {
+                    Print($"[Zorro Bridge] Inner exception: {ex.InnerException.Message}");
+                }
                 return $"ERROR:{ex.Message}";
             }
         }
