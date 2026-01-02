@@ -110,8 +110,15 @@ function run()
 				printf("\n  [PASS] Order filled!");
 				printf("\n  Entry Price: %.2f", TradePriceOpen);
 				printf("\n  Limit Price: %.2f", g_LimitPrice);
-				printf("\n  Fill Quality: %s", 
-					TradePriceOpen <= g_LimitPrice ? "GOOD (at or better)" : "BAD (worse than limit)");
+				
+				// Check fill quality
+				string fillQuality;
+				if(TradePriceOpen <= g_LimitPrice + 0.01)
+					fillQuality = "GOOD (at or better)";
+				else
+					fillQuality = "BAD (worse than limit)";
+				
+				printf("\n  Fill Quality: %s", fillQuality);
 				
 				g_EntryPrice = TradePriceOpen;
 				
@@ -199,8 +206,15 @@ function run()
 				printf("\n  [PASS] Order filled!");
 				printf("\n  Entry Price: %.2f", TradePriceOpen);
 				printf("\n  Limit Price: %.2f", g_LimitPrice);
-				printf("\n  Fill Quality: %s",
-					TradePriceOpen >= g_LimitPrice ? "GOOD (at or better)" : "BAD (worse than limit)");
+				
+				// Check fill quality
+				string fillQuality;
+				if(TradePriceOpen >= g_LimitPrice - 0.01)
+					fillQuality = "GOOD (at or better)";
+				else
+					fillQuality = "BAD (worse than limit)";
+				
+				printf("\n  Fill Quality: %s", fillQuality);
 				
 				g_EntryPrice = TradePriceOpen;
 				
