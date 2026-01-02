@@ -272,3 +272,44 @@ style NodeName fill:#HEXCOLOR,stroke:#333,stroke-width:2px,color:#000
 2. Check symbol exists in NT (open a chart)
 3. Look for subscription messages in NT Output
 4. Asset Name in Assets.csv must match script usage
+
+## Git Commit Messages in PowerShell
+
+**NEVER use multi-line strings directly in git commit -m**
+
+PowerShell has issues with newlines in command arguments. Use one of these methods:
+
+### Method 1: Commit Message File (RECOMMENDED)
+```powershell
+# Create temp file with full message
+@"
+Add configurable logging system
+
+Major improvements:
+- Added LogLevel enum (TRACE/DEBUG/INFO/WARN/ERROR)
+- Heartbeat logs status every 10 seconds
+- SETLOGLEVEL command for runtime changes
+
+Benefits:
+- Production: Clean INFO logs
+- Debugging: Switch to DEBUG/TRACE without restart
+- Performance: Reduced console spam
+"@ | Out-File -FilePath .git/COMMIT_EDITMSG_temp -Encoding UTF8
+
+# Commit using file
+git commit -F .git/COMMIT_EDITMSG_temp
+```
+
+### Method 2: Simple One-Line (for quick commits)
+```powershell
+git commit -m "Add feature X - description here"
+```
+
+### Method 3: Multiple -m Flags (for paragraphs)
+```powershell
+git commit -m "Title line" `
+  -m "First paragraph of details" `
+  -m "Second paragraph with more info"
+```
+
+**RULE:** Always use Method 1 for detailed commit messages to avoid PowerShell newline issues.
