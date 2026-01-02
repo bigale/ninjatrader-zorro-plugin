@@ -308,9 +308,9 @@ int TcpBridge::Command(const char* command, const char* account, const char* ins
     std::ostringstream cmd;
     
     if (strcmp(command, "PLACE") == 0) {
-        // PLACEORDER:BUY/SELL:INSTRUMENT:QUANTITY:MARKET/LIMIT:PRICE
+        // PLACEORDER:BUY/SELL:INSTRUMENT:QUANTITY:ORDERTYPE:LIMITPRICE:STOPPRICE
         cmd << "PLACEORDER:" << action << ":" << instrument << ":" << quantity 
-            << ":" << orderType << ":" << limitPrice;
+            << ":" << orderType << ":" << limitPrice << ":" << stopPrice;
         
         // Debug logging
         printf("[TcpBridge] Sending order command: %s\n", cmd.str().c_str());
@@ -320,6 +320,7 @@ int TcpBridge::Command(const char* command, const char* account, const char* ins
         printf("  Quantity: %d\n", quantity);
         printf("  OrderType: %s\n", orderType);
         printf("  LimitPrice: %.2f\n", limitPrice);
+        printf("  StopPrice: %.2f\n", stopPrice);
         
         std::string response = SendCommand(cmd.str());
         

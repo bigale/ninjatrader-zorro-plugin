@@ -483,7 +483,7 @@ namespace NinjaTrader.NinjaScript.AddOns
 
         private string HandlePlaceOrder(string[] parts)
         {
-            // PLACEORDER:BUY/SELL:INSTRUMENT:QUANTITY:MARKET/LIMIT:PRICE
+            // PLACEORDER:BUY/SELL:INSTRUMENT:QUANTITY:ORDERTYPE:LIMITPRICE:STOPPRICE
             Log(LogLevel.DEBUG, "==== PlaceOrder START ====");
             Log(LogLevel.TRACE, $"Raw: {string.Join(":", parts)}");
             
@@ -506,10 +506,13 @@ namespace NinjaTrader.NinjaScript.AddOns
                 int quantity = int.Parse(parts[3]);
                 string orderType = parts[4].ToUpper();
                 double limitPrice = parts.Length > 5 ? double.Parse(parts[5]) : 0;
+                double stopPrice = parts.Length > 6 ? double.Parse(parts[6]) : 0;
 
                 Log(LogLevel.DEBUG, $"Order: {action} {quantity} {zorroSymbol} @ {orderType}");
                 if (limitPrice > 0)
                     Log(LogLevel.DEBUG, $"Limit: {limitPrice}");
+                if (stopPrice > 0)
+                    Log(LogLevel.DEBUG, $"Stop: {stopPrice}");
 
                 string nt8Symbol = ConvertToNT8Symbol(zorroSymbol);
                 if (nt8Symbol != zorroSymbol)
@@ -525,7 +528,27 @@ namespace NinjaTrader.NinjaScript.AddOns
                 Log(LogLevel.TRACE, $"Instrument: {instrument.FullName}");
 
                 OrderAction orderAction = action == "BUY" ? OrderAction.Buy : OrderAction.Sell;
-                OrderType nt8OrderType = orderType == "LIMIT" ? OrderType.Limit : OrderType.Market;
+                
+                // Determine NinjaTrader order type
+                OrderType nt8OrderType;
+                switch (orderType)
+                {
+                    case "LIMIT":
+                        nt8OrderType = OrderType.Limit;
+                        break;
+                    case "STOP":
+                        nt8OrderType = OrderType.StopMarket;
+                        break;
+                    case "STOPLIMIT":
+                        nt8OrderType = OrderType.StopLimit;
+                        break;
+                    case "MARKET":
+                    default:
+                        nt8OrderType = OrderType.Market;
+                        break;
+                }
+
+                Log(LogLevel.TRACE, $"NT8 OrderType: {nt8OrderType}");
 
                 Order order = currentAccount.CreateOrder(
                     instrument,
@@ -535,7 +558,7 @@ namespace NinjaTrader.NinjaScript.AddOns
                     TimeInForce.Day,
                     quantity,
                     limitPrice,
-                    0,
+                    stopPrice,
                     "",
                     "Zorro",
                     DateTime.MaxValue,
@@ -546,7 +569,7 @@ namespace NinjaTrader.NinjaScript.AddOns
                 
                 currentAccount.Submit(new[] { order });
                 
-                Log(LogLevel.INFO, $"ORDER PLACED: {action} {quantity} {zorroSymbol} (ID:{order.OrderId})");
+                Log(LogLevel.INFO, $"ORDER PLACED: {action} {quantity} {zorroSymbol} @ {orderType} (ID:{order.OrderId})");
                 
                 activeOrders.Add(order);
                 orderCount++;

@@ -323,8 +323,8 @@ DLLFUNC int BrokerAccount(char* Account, double* pBalance, double* pTradeVal,
 DLLFUNC int BrokerBuy2(char* Asset, int Amount, double StopDist, double Limit,
     double* pPrice, int* pFill)
 {
-    LogMessage("# [BrokerBuy2] Called with Asset=%s, Amount=%d, Limit=%.2f", 
-        Asset ? Asset : "NULL", Amount, Limit);
+    LogMessage("# [BrokerBuy2] Called with Asset=%s, Amount=%d, StopDist=%.2f, Limit=%.2f", 
+        Asset ? Asset : "NULL", Amount, StopDist, Limit);
     
     if (!g_bridge || !g_connected || !Asset || Amount == 0) {
         LogError("[BrokerBuy2] Pre-check failed: bridge=%p, connected=%d, Asset=%s, Amount=%d",
@@ -336,18 +336,52 @@ DLLFUNC int BrokerBuy2(char* Asset, int Amount, double StopDist, double Limit,
     const char* action = (Amount > 0) ? "BUY" : "SELL";
     int quantity = abs(Amount);
     
-    // Determine order type
+    // Determine order type and prices
     const char* orderType = "MARKET";
     double limitPrice = 0.0;
     double stopPrice = 0.0;
     
-    if (Limit > 0) {
+    // Priority: Stop orders > Limit orders > Market orders
+    if (StopDist > 0) {
+        // Stop order - calculate stop price from current market price
+        double currentPrice = g_bridge->GetLast(Asset);
+        if (currentPrice <= 0) {
+            currentPrice = g_bridge->GetAsk(Asset);  // Fallback to ask
+        }
+        
+        if (currentPrice > 0) {
+            if (Amount > 0) {
+                // Buy stop: trigger above current price
+                stopPrice = currentPrice + StopDist;
+            } else {
+                // Sell stop: trigger below current price
+                stopPrice = currentPrice - StopDist;
+            }
+            
+            if (Limit > 0) {
+                // Stop-Limit order
+                orderType = "STOPLIMIT";
+                limitPrice = Limit;
+            } else {
+                // Stop-Market order
+                orderType = "STOP";
+            }
+            
+            LogMessage("# [BrokerBuy2] Stop order: %s stop @ %.2f (current: %.2f, dist: %.2f)",
+                action, stopPrice, currentPrice, StopDist);
+        } else {
+            LogError("Cannot calculate stop price - no market data");
+            return 0;
+        }
+    } else if (Limit > 0) {
+        // Limit order (no stop)
         orderType = "LIMIT";
         limitPrice = Limit;
     }
+    // else: Market order (defaults set above)
     
-    LogMessage("# [BrokerBuy2] Order params: %s %d %s @ %s (limit=%.2f)",
-        action, quantity, Asset, orderType, limitPrice);
+    LogMessage("# [BrokerBuy2] Order params: %s %d %s @ %s (limit=%.2f, stop=%.2f)",
+        action, quantity, Asset, orderType, limitPrice, stopPrice);
     
     // Get a new order ID from NinjaTrader
     const char* ntOrderId = g_bridge->NewOrderId();
@@ -436,6 +470,9 @@ DLLFUNC int BrokerBuy2(char* Asset, int Amount, double StopDist, double Limit,
                 break;
             }
         }
+    } else {
+        // Stop and limit orders: don't wait for fill
+        LogMessage("# [BrokerBuy2] %s order placed, will fill when triggered", orderType);
     }
     
     LogMessage("# [BrokerBuy2] Returning order ID: %d", numericId);
