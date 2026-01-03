@@ -24,6 +24,7 @@ int (__cdecl *BrokerProgress)(const int progress) = nullptr;
 static std::string g_account;                    // Current account name
 static std::string g_currentSymbol;              // Current asset symbol
 static int g_orderType = ORDER_GTC;              // Default order TIF
+static int g_diagLevel = 0;                      // Diagnostic level (0=errors only, 1=info, 2=debug)
 static std::map<int, OrderInfo> g_orders;        // Track orders by numeric ID
 static std::map<std::string, int> g_orderIdMap;  // Map NT orderId to numeric ID
 static int g_nextOrderNum = 1000;                // Next numeric order ID
@@ -71,6 +72,43 @@ void LogError(const char* format, ...)
     va_end(args);
     
     BrokerMessage(buffer);
+}
+
+// Conditional logging based on diagnostic level
+void LogInfo(const char* format, ...)
+{
+    if (!BrokerMessage || g_diagLevel < 1) return;
+    
+    char buffer[1024];
+    va_list args;
+    va_start(args, format);
+    vsnprintf(buffer, sizeof(buffer), format, args);
+    va_end(args);
+    
+    BrokerMessage(buffer);
+}
+
+void LogDebug(const char* format, ...)
+{
+    if (!BrokerMessage || g_diagLevel < 2) return;
+    
+    char buffer[1024];
+    va_list args;
+    va_start(args, format);
+    vsnprintf(buffer, sizeof(buffer), format, args);
+    va_end(args);
+    
+    BrokerMessage(buffer);
+}
+
+// Keep Zorro responsive during waits - allows user cancellation
+static int responsiveSleep(int ms)
+{
+    Sleep(ms);
+    if (BrokerProgress) {
+        return BrokerProgress(0);  // Returns 0 if user wants to abort
+    }
+    return 1;  // Continue
 }
 
 // Calculate stop price from current market price and stop distance
@@ -136,7 +174,7 @@ DLLFUNC int BrokerOpen(char* Name, FARPROC fpMessage, FARPROC fpProgress)
         g_bridge = new TcpBridge();  // Changed from NtDirect
     }
     
-    LogMessage("# NT8 plugin initialized (TCP Bridge for NT8 8.1+)");
+    LogMessage("# NT8 plugin v%s (TCP Bridge for NT8 8.1+)", PLUGIN_VERSION_STRING);
     
     return PLUGIN_VERSION;
 }
@@ -335,7 +373,7 @@ DLLFUNC int BrokerAccount(char* Account, double* pBalance, double* pTradeVal,
 DLLFUNC int BrokerBuy2(char* Asset, int Amount, double StopDist, double Limit,
     double* pPrice, int* pFill)
 {
-    LogMessage("# [BrokerBuy2] Called with Asset=%s, Amount=%d, StopDist=%.2f, Limit=%.2f", 
+    LogDebug("# [BrokerBuy2] Called with Asset=%s, Amount=%d, StopDist=%.2f, Limit=%.2f", 
         Asset ? Asset : "NULL", Amount, StopDist, Limit);
     
     if (!g_bridge || !g_connected || !Asset || Amount == 0) {
@@ -374,7 +412,7 @@ DLLFUNC int BrokerBuy2(char* Asset, int Amount, double StopDist, double Limit,
                 orderType = "STOP";
             }
             
-            LogMessage("# [BrokerBuy2] Stop order: %s stop @ %.2f (current: %.2f, dist: %.2f)",
+            LogDebug("# [BrokerBuy2] Stop order: %s stop @ %.2f (current: %.2f, dist: %.2f)",
                 action, stopPrice, currentPrice, StopDist);
         } else {
             LogError("Cannot calculate stop price - no market data");
@@ -387,7 +425,7 @@ DLLFUNC int BrokerBuy2(char* Asset, int Amount, double StopDist, double Limit,
     }
     // else: Market order (defaults set above)
     
-    LogMessage("# [BrokerBuy2] Order params: %s %d %s @ %s (limit=%.2f, stop=%.2f)",
+    LogDebug("# [BrokerBuy2] Order params: %s %d %s @ %s (limit=%.2f, stop=%.2f)",
         action, quantity, Asset, orderType, limitPrice, stopPrice);
     
     // Get a new order ID from NinjaTrader
@@ -399,14 +437,14 @@ DLLFUNC int BrokerBuy2(char* Asset, int Amount, double StopDist, double Limit,
     
     // Copy order ID (NT returns pointer to static buffer)
     std::string orderId = ntOrderId;
-    LogMessage("# [BrokerBuy2] Generated order ID: %s", orderId.c_str());
+    LogDebug("# [BrokerBuy2] Generated order ID: %s", orderId.c_str());
     
     // Get time in force
     const char* tif = GetTimeInForce(g_orderType);
-    LogMessage("# [BrokerBuy2] Time in force: %s", tif);
+    LogDebug("# [BrokerBuy2] Time in force: %s", tif);
     
     // Place the order
-    LogMessage("# [BrokerBuy2] Calling Command(PLACE)...");
+    LogDebug("# [BrokerBuy2] Calling Command(PLACE)...");
     int result = g_bridge->Command(
         "PLACE",
         g_account.c_str(),
@@ -423,7 +461,7 @@ DLLFUNC int BrokerBuy2(char* Asset, int Amount, double StopDist, double Limit,
         ""            // Strategy Name
     );
     
-    LogMessage("# [BrokerBuy2] Command returned: %d", result);
+    LogDebug("# [BrokerBuy2] Command returned: %d", result);
     
     if (result != 0) {
         LogError("Order placement failed: %s %d %s @ %s (result=%d)",
@@ -431,7 +469,7 @@ DLLFUNC int BrokerBuy2(char* Asset, int Amount, double StopDist, double Limit,
         return 0;
     }
     
-    LogMessage("# [BrokerBuy2] Order placed successfully!");
+    LogInfo("# [BrokerBuy2] Order placed successfully!");
     
     // Create order tracking info
     OrderInfo info;
@@ -448,15 +486,18 @@ DLLFUNC int BrokerBuy2(char* Asset, int Amount, double StopDist, double Limit,
     // Register order and get numeric ID
     int numericId = RegisterOrder(orderId.c_str(), info);
     
-    LogMessage("# Order %d (%s): %s %d %s @ %s",
+    LogInfo("# Order %d (%s): %s %d %s @ %s",
         numericId, orderId.c_str(), action, quantity, Asset,
         orderType);
     
     // For market orders, wait briefly for fill
     if (strcmp(orderType, "MARKET") == 0) {
-        LogMessage("# [BrokerBuy2] Waiting for market order fill...");
+        LogDebug("# [BrokerBuy2] Waiting for market order fill...");
         for (int i = 0; i < 10; i++) {
-            Sleep(100);
+            if (!responsiveSleep(100)) {
+                LogInfo("# [BrokerBuy2] User cancelled wait for fill");
+                break;  // User wants to abort
+            }
             
             int filled = g_bridge->Filled(orderId.c_str());
             if (filled > 0) {
@@ -473,16 +514,16 @@ DLLFUNC int BrokerBuy2(char* Asset, int Amount, double StopDist, double Limit,
                 if (pPrice) *pPrice = fillPrice;
                 if (pFill) *pFill = filled;
                 
-                LogMessage("# Order %d filled: %d @ %.2f", numericId, filled, fillPrice);
+                LogInfo("# Order %d filled: %d @ %.2f", numericId, filled, fillPrice);
                 break;
             }
         }
     } else {
         // Stop and limit orders: don't wait for fill
-        LogMessage("# [BrokerBuy2] %s order placed, will fill when triggered", orderType);
+        LogDebug("# [BrokerBuy2] %s order placed, will fill when triggered", orderType);
     }
     
-    LogMessage("# [BrokerBuy2] Returning order ID: %d", numericId);
+    LogDebug("# [BrokerBuy2] Returning order ID: %d", numericId);
     return numericId;
 }
 
@@ -637,7 +678,10 @@ DLLFUNC int BrokerSell2(int nTradeID, int nAmount, double Limit,
     // Wait for fill (market orders)
     if (strcmp(orderType, "MARKET") == 0) {
         for (int i = 0; i < 10; i++) {
-            Sleep(100);
+            if (!responsiveSleep(100)) {
+                LogInfo("# [BrokerSell2] User cancelled wait for fill");
+                break;  // User wants to abort
+            }
             
             int filled = g_bridge->Filled(closeOrderId.c_str());
             if (filled > 0) {
@@ -711,6 +755,18 @@ DLLFUNC double BrokerCommand(int Command, DWORD dwParameter)
             }
             return 0;
         }
+        
+        case SET_DIAGNOSTICS:
+            g_diagLevel = (int)dwParameter;
+            LogMessage("# Diagnostic level set to %d (0=errors, 1=info, 2=debug)", g_diagLevel);
+            return 1;
+        
+        case GET_DIAGNOSTICS:
+            return g_diagLevel;
+        
+        case GET_MAXREQUESTS:
+            // TCP to localhost is very fast, allow many requests
+            return 20.0;  // 20 requests per second
         
         case GET_WAIT:
             return 50;  // 50ms polling interval

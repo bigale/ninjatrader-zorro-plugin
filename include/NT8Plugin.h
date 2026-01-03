@@ -20,6 +20,20 @@
 // Plugin info
 #define PLUGIN_NAME    "NT8"
 
+// Version tracking
+#define PLUGIN_VERSION_MAJOR 1
+#define PLUGIN_VERSION_MINOR 0
+#define PLUGIN_VERSION_PATCH 0
+#define PLUGIN_VERSION ((PLUGIN_VERSION_MAJOR << 16) | (PLUGIN_VERSION_MINOR << 8) | PLUGIN_VERSION_PATCH)
+
+// Version string helper
+#define STRINGIFY(x) #x
+#define TOSTRING(x) STRINGIFY(x)
+#define PLUGIN_VERSION_STRING \
+    TOSTRING(PLUGIN_VERSION_MAJOR) "." \
+    TOSTRING(PLUGIN_VERSION_MINOR) "." \
+    TOSTRING(PLUGIN_VERSION_PATCH)
+
 // Global state
 extern TcpBridge* g_bridge;  // Changed from NtDirect
 extern int (__cdecl *BrokerMessage)(const char* text);
