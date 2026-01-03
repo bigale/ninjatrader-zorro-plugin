@@ -73,6 +73,18 @@ void LogError(const char* format, ...)
     BrokerMessage(buffer);
 }
 
+// Calculate stop price from current market price and stop distance
+static double CalculateStopPrice(int amount, double currentPrice, double stopDist)
+{
+    if (amount > 0) {
+        // Buy stop: trigger above current market price
+        return currentPrice + stopDist;
+    } else {
+        // Sell stop: trigger below current market price
+        return currentPrice - stopDist;
+    }
+}
+
 // Get time in force string from order type
 static const char* GetTimeInForce(int orderType)
 {
@@ -350,13 +362,8 @@ DLLFUNC int BrokerBuy2(char* Asset, int Amount, double StopDist, double Limit,
         }
         
         if (currentPrice > 0) {
-            if (Amount > 0) {
-                // Buy stop: trigger above current price
-                stopPrice = currentPrice + StopDist;
-            } else {
-                // Sell stop: trigger below current price
-                stopPrice = currentPrice - StopDist;
-            }
+            // Calculate stop price using helper function
+            stopPrice = CalculateStopPrice(Amount, currentPrice, StopDist);
             
             if (Limit > 0) {
                 // Stop-Limit order
