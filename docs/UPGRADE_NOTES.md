@@ -80,6 +80,85 @@ double maxReq = brokerCommand(GET_MAXREQUESTS, 0);
 
 ---
 
+## Phase 2: Architecture Refactoring ?
+
+**Added in**: v1.0.0 (upgrades branch)
+
+### 5. PluginState Struct ?
+
+**Added**: Consolidated global state
+
+```cpp
+struct PluginState {
+    // Configuration
+    int diagLevel = 0;
+    int orderType = ORDER_GTC;
+    
+    // Connection state
+    bool connected = false;
+    
+    // Account state
+    std::string account;
+    std::string currentSymbol;
+    
+    // Order tracking
+    std::map<int, OrderInfo> orders;
+    std::map<std::string, int> orderIdMap;
+    int nextOrderNum = 1000;
+    
+    void reset();  // Clean state on logout
+};
+
+static PluginState g_state;
+```
+
+**Benefits**:
+- All state in one place (organized)
+- Easy to reset entire state
+- Better encapsulation
+- Type-safe (C++ containers)
+- Clear initialization with defaults
+
+**All references updated**:
+- `g_account` ? `g_state.account`
+- `g_connected` ? `g_state.connected`
+- `g_diagLevel` ? `g_state.diagLevel`
+- `g_orders` ? `g_state.orders`
+- etc.
+
+---
+
+### 6. std::unique_ptr for g_bridge ?
+
+**Changed**: Raw pointer to smart pointer
+
+```cpp
+// Before:
+TcpBridge* g_bridge = nullptr;
+
+// After:
+std::unique_ptr<TcpBridge> g_bridge;
+```
+
+**Benefits**:
+- Automatic cleanup (no manual delete)
+- Cannot be copied (prevents errors)
+- Modern C++ best practice
+- Memory safety guaranteed
+
+**Initialization**:
+```cpp
+// In BrokerOpen:
+g_bridge = std::make_unique<TcpBridge>();
+
+// In DllMain cleanup:
+g_bridge.reset();  // Automatic cleanup
+```
+
+**No API changes**: All usage (g_bridge->method()) stays the same
+
+---
+
 ## Migration Guide
 
 ### For Existing Scripts
@@ -231,29 +310,6 @@ function run()
 - UI stays responsive during waits
 - User can cancel operations
 - Better experience in slow markets
-
----
-
-## Future Improvements (Deferred)
-
-The following improvements were identified but deferred for v2.0:
-
-### 7. PluginState Struct (v2.0)
-- Consolidate scattered globals into struct
-- Better organization
-- Easier reset/initialization
-
-### 8. std::unique_ptr for g_bridge (v2.0)
-- Automatic cleanup
-- Memory safety
-- Modern C++ best practice
-
-**Reason for Deferral**: These are **major refactoring** changes that require:
-- Extensive testing
-- Potential build changes
-- More development time
-
-Current version focuses on **UX improvements** with **minimal risk**.
 
 ---
 

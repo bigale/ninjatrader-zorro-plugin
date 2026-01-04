@@ -17,18 +17,11 @@
 // Global State
 //=============================================================================
 
-TcpBridge* g_bridge = nullptr;  // Changed from NtDirect
+std::unique_ptr<TcpBridge> g_bridge;  // TCP communication bridge
 int (__cdecl *BrokerMessage)(const char* text) = nullptr;
 int (__cdecl *BrokerProgress)(const int progress) = nullptr;
 
-static std::string g_account;                    // Current account name
-static std::string g_currentSymbol;              // Current asset symbol
-static int g_orderType = ORDER_GTC;              // Default order TIF
-static int g_diagLevel = 0;                      // Diagnostic level (0=errors only, 1=info, 2=debug)
-static std::map<int, OrderInfo> g_orders;        // Track orders by numeric ID
-static std::map<std::string, int> g_orderIdMap;  // Map NT orderId to numeric ID
-static int g_nextOrderNum = 1000;                // Next numeric order ID
-static bool g_connected = false;
+static PluginState g_state;  // All plugin state consolidated here
 
 //=============================================================================
 // Utility Functions
@@ -77,7 +70,7 @@ void LogError(const char* format, ...)
 // Conditional logging based on diagnostic level
 void LogInfo(const char* format, ...)
 {
-    if (!BrokerMessage || g_diagLevel < 1) return;
+    if (!BrokerMessage || g_state.diagLevel < 1) return;
     
     char buffer[1024];
     va_list args;
@@ -90,7 +83,7 @@ void LogInfo(const char* format, ...)
 
 void LogDebug(const char* format, ...)
 {
-    if (!BrokerMessage || g_diagLevel < 2) return;
+    if (!BrokerMessage || g_state.diagLevel < 2) return;
     
     char buffer[1024];
     va_list args;
@@ -137,18 +130,18 @@ static const char* GetTimeInForce(int orderType)
 // Generate unique numeric order ID and store mapping
 static int RegisterOrder(const char* ntOrderId, const OrderInfo& info)
 {
-    int numId = g_nextOrderNum++;
-    g_orders[numId] = info;
-    g_orders[numId].orderId = ntOrderId;
-    g_orderIdMap[ntOrderId] = numId;
+    int numId = g_state.nextOrderNum++;
+    g_state.orders[numId] = info;
+    g_state.orders[numId].orderId = ntOrderId;
+    g_state.orderIdMap[ntOrderId] = numId;
     return numId;
 }
 
 // Look up order by numeric ID
 static OrderInfo* GetOrder(int numId)
 {
-    auto it = g_orders.find(numId);
-    if (it != g_orders.end()) {
+    auto it = g_state.orders.find(numId);
+    if (it != g_state.orders.end()) {
         return &it->second;
     }
     return nullptr;
@@ -171,7 +164,7 @@ DLLFUNC int BrokerOpen(char* Name, FARPROC fpMessage, FARPROC fpProgress)
     
     // Create TCP Bridge wrapper
     if (!g_bridge) {
-        g_bridge = new TcpBridge();  // Changed from NtDirect
+        g_bridge = std::make_unique<TcpBridge>();
     }
     
     LogMessage("# NT8 plugin v%s (TCP Bridge for NT8 8.1+)", PLUGIN_VERSION_STRING);
@@ -190,8 +183,8 @@ DLLFUNC int BrokerLogin(char* User, char* Pwd, char* Type, char* Accounts)
         if (g_bridge) {
             g_bridge->TearDown();
         }
-        g_connected = false;
-        g_account.clear();
+        g_state.connected = false;
+        g_state.account.clear();
         LogMessage("# NT8 disconnected");
         return 0;
     }
@@ -219,15 +212,15 @@ DLLFUNC int BrokerLogin(char* User, char* Pwd, char* Type, char* Accounts)
     }
     
     // Store account name
-    g_account = User;
-    g_connected = true;
+    g_state.account = User;
+    g_state.connected = true;
     
     // Return account name in Accounts parameter
     if (Accounts) {
         strcpy_s(Accounts, 1024, User);
     }
     
-    LogMessage("# NT8 connected to account: %s (via TCP)", g_account.c_str());
+    LogMessage("# NT8 connected to account: %s (via TCP)", g_state.account.c_str());
     
     return 1;
 }
@@ -238,7 +231,7 @@ DLLFUNC int BrokerLogin(char* User, char* Pwd, char* Type, char* Accounts)
 
 DLLFUNC int BrokerTime(DATE* pTimeUTC)
 {
-    if (!g_bridge || !g_connected) {
+    if (!g_bridge || !g_state.connected) {
         return 0;
     }
     
@@ -249,7 +242,7 @@ DLLFUNC int BrokerTime(DATE* pTimeUTC)
     
     // Check still connected
     if (g_bridge->Connected(0) != 0) {
-        g_connected = false;
+        g_state.connected = false;
         return 0;
     }
     
@@ -273,7 +266,7 @@ DLLFUNC int BrokerAsset(char* Asset, double* pPrice, double* pSpread,
     double* pVolume, double* pPip, double* pPipCost, double* pLotAmount,
     double* pMargin, double* pRollLong, double* pRollShort, double* pCommission)
 {
-    if (!g_bridge || !g_connected || !Asset) {
+    if (!g_bridge || !g_state.connected || !Asset) {
         return 0;
     }
     
@@ -281,7 +274,7 @@ DLLFUNC int BrokerAsset(char* Asset, double* pPrice, double* pSpread,
     if (!pPrice) {
         int result = g_bridge->SubscribeMarketData(Asset);
         if (result == 0) {
-            g_currentSymbol = Asset;
+            g_state.currentSymbol = Asset;
             LogMessage("# Subscribed to %s", Asset);
             return 1;
         }
@@ -290,9 +283,9 @@ DLLFUNC int BrokerAsset(char* Asset, double* pPrice, double* pSpread,
     }
     
     // Make sure we're subscribed
-    if (g_currentSymbol != Asset) {
+    if (g_state.currentSymbol != Asset) {
         g_bridge->SubscribeMarketData(Asset);
-        g_currentSymbol = Asset;
+        g_state.currentSymbol = Asset;
         Sleep(100);  // Brief delay for data to arrive
     }
     
@@ -335,12 +328,12 @@ DLLFUNC int BrokerAsset(char* Asset, double* pPrice, double* pSpread,
 DLLFUNC int BrokerAccount(char* Account, double* pBalance, double* pTradeVal,
     double* pMarginVal)
 {
-    if (!g_bridge || !g_connected) {
+    if (!g_bridge || !g_state.connected) {
         return 0;
     }
     
     // Switch account if specified
-    const char* acct = (Account && *Account) ? Account : g_account.c_str();
+    const char* acct = (Account && *Account) ? Account : g_state.account.c_str();
     
     // Get account values
     double cashValue = g_bridge->CashValue(acct);
@@ -376,9 +369,9 @@ DLLFUNC int BrokerBuy2(char* Asset, int Amount, double StopDist, double Limit,
     LogDebug("# [BrokerBuy2] Called with Asset=%s, Amount=%d, StopDist=%.2f, Limit=%.2f", 
         Asset ? Asset : "NULL", Amount, StopDist, Limit);
     
-    if (!g_bridge || !g_connected || !Asset || Amount == 0) {
-        LogError("[BrokerBuy2] Pre-check failed: bridge=%p, connected=%d, Asset=%s, Amount=%d",
-            g_bridge, g_connected, Asset ? Asset : "NULL", Amount);
+    if (!g_bridge || !g_state.connected || !Asset || Amount == 0) {
+        LogError("[BrokerBuy2] Pre-check failed: connected=%d, Asset=%s, Amount=%d",
+            g_state.connected, Asset ? Asset : "NULL", Amount);
         return 0;
     }
     
@@ -440,14 +433,14 @@ DLLFUNC int BrokerBuy2(char* Asset, int Amount, double StopDist, double Limit,
     LogDebug("# [BrokerBuy2] Generated order ID: %s", orderId.c_str());
     
     // Get time in force
-    const char* tif = GetTimeInForce(g_orderType);
+    const char* tif = GetTimeInForce(g_state.orderType);
     LogDebug("# [BrokerBuy2] Time in force: %s", tif);
     
     // Place the order
     LogDebug("# [BrokerBuy2] Calling Command(PLACE)...");
     int result = g_bridge->Command(
         "PLACE",
-        g_account.c_str(),
+        g_state.account.c_str(),
         Asset,
         action,
         quantity,
@@ -534,7 +527,7 @@ DLLFUNC int BrokerBuy2(char* Asset, int Amount, double StopDist, double Limit,
 DLLFUNC int BrokerTrade(int nTradeID, double* pOpen, double* pClose,
     double* pCost, double* pProfit)
 {
-    if (!g_bridge || !g_connected) {
+    if (!g_bridge || !g_state.connected) {
         return NAY;
     }
     
@@ -590,7 +583,7 @@ DLLFUNC int BrokerTrade(int nTradeID, double* pOpen, double* pClose,
 DLLFUNC int BrokerSell2(int nTradeID, int nAmount, double Limit,
     double* pClose, double* pCost, double* pProfit, int* pFill)
 {
-    if (!g_bridge || !g_connected) {
+    if (!g_bridge || !g_state.connected) {
         return 0;
     }
     
@@ -622,7 +615,7 @@ DLLFUNC int BrokerSell2(int nTradeID, int nAmount, double Limit,
         
         // If order->filled is still 0, check current position from NinjaTrader
         if (quantity <= 0 && !order->instrument.empty()) {
-            int position = g_bridge->MarketPosition(order->instrument.c_str(), g_account.c_str());
+            int position = g_bridge->MarketPosition(order->instrument.c_str(), g_state.account.c_str());
             quantity = abs(position);
             
             if (quantity > 0) {
@@ -656,14 +649,14 @@ DLLFUNC int BrokerSell2(int nTradeID, int nAmount, double Limit,
     // Place closing order
     int result = g_bridge->Command(
         "PLACE",
-        g_account.c_str(),
+        g_state.account.c_str(),
         order->instrument.c_str(),
         action,
         quantity,
         orderType,
         limitPrice,
         0.0,
-        GetTimeInForce(g_orderType),
+        GetTimeInForce(g_state.orderType),
         "",
         closeOrderId.c_str(),
         "",
@@ -724,24 +717,24 @@ DLLFUNC double BrokerCommand(int Command, DWORD dwParameter)
             return 0;   // No historical data via ATI
             
         case GET_POSITION: {
-            if (!dwParameter || !g_connected) return 0;
+            if (!dwParameter || !g_state.connected) return 0;
             const char* symbol = (const char*)dwParameter;
-            return (double)g_bridge->MarketPosition(symbol, g_account.c_str());
+            return (double)g_bridge->MarketPosition(symbol, g_state.account.c_str());
         }
         
         case GET_AVGENTRY: {
-            if (!dwParameter || !g_connected) return 0;
+            if (!dwParameter || !g_state.connected) return 0;
             const char* symbol = (const char*)dwParameter;
-            return g_bridge->AvgEntryPrice(symbol, g_account.c_str());
+            return g_bridge->AvgEntryPrice(symbol, g_state.account.c_str());
         }
         
         case SET_ORDERTYPE:
-            g_orderType = (int)dwParameter;
+            g_state.orderType = (int)dwParameter;
             return 1;
             
         case SET_SYMBOL:
             if (dwParameter) {
-                g_currentSymbol = (const char*)dwParameter;
+                g_state.currentSymbol = (const char*)dwParameter;
             }
             return 1;
             
@@ -757,12 +750,12 @@ DLLFUNC double BrokerCommand(int Command, DWORD dwParameter)
         }
         
         case SET_DIAGNOSTICS:
-            g_diagLevel = (int)dwParameter;
-            LogMessage("# Diagnostic level set to %d (0=errors, 1=info, 2=debug)", g_diagLevel);
+            g_state.diagLevel = (int)dwParameter;
+            LogMessage("# Diagnostic level set to %d (0=errors, 1=info, 2=debug)", g_state.diagLevel);
             return 1;
         
         case GET_DIAGNOSTICS:
-            return g_diagLevel;
+            return g_state.diagLevel;
         
         case GET_MAXREQUESTS:
             // TCP to localhost is very fast, allow many requests
@@ -791,14 +784,13 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserv
             // Cleanup
             if (g_bridge) {
                 // Unsubscribe from market data
-                if (!g_currentSymbol.empty()) {
-                    g_bridge->UnSubscribeMarketData(g_currentSymbol.c_str());
+                if (!g_state.currentSymbol.empty()) {
+                    g_bridge->UnSubscribeMarketData(g_state.currentSymbol.c_str());
                 }
-                delete g_bridge;
-                g_bridge = nullptr;
+                g_bridge.reset();
             }
-            g_orders.clear();
-            g_orderIdMap.clear();
+            g_state.orders.clear();
+            g_state.orderIdMap.clear();
             break;
     }
     return TRUE;
