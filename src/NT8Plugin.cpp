@@ -104,6 +104,43 @@ static int responsiveSleep(int ms)
     return 1;  // Continue
 }
 
+// Poll for position update after order fill
+// Retries up to maxAttempts times with delayMs between attempts
+// Returns actual position or 0 if timeout/error
+static int pollForPosition(const char* symbol, const char* account, int expectedChange, int maxAttempts, int delayMs)
+{
+    int previousPos = g_bridge->MarketPosition(symbol, account);
+    
+    for (int attempt = 0; attempt < maxAttempts; attempt++) {
+        if (!responsiveSleep(delayMs)) {
+            LogInfo("# Position poll cancelled by user");
+            break;
+        }
+        
+        int currentPos = g_bridge->MarketPosition(symbol, account);
+        
+        // Check if position changed in expected direction
+        if (expectedChange > 0 && currentPos > previousPos) {
+            LogInfo("# Position updated: %d (after %d ms)", currentPos, (attempt + 1) * delayMs);
+            return currentPos;
+        } else if (expectedChange < 0 && currentPos < previousPos) {
+            LogInfo("# Position updated: %d (after %d ms)", currentPos, (attempt + 1) * delayMs);
+            return currentPos;
+        } else if (expectedChange == 0 && currentPos != previousPos) {
+            // Any change detected
+            LogInfo("# Position updated: %d (after %d ms)", currentPos, (attempt + 1) * delayMs);
+            return currentPos;
+        }
+        
+        LogDebug("# Poll attempt %d/%d: position still %d", attempt + 1, maxAttempts, currentPos);
+    }
+    
+    // Timeout - return last known position
+    int finalPos = g_bridge->MarketPosition(symbol, account);
+    LogInfo("# Position poll timeout after %d ms, returning: %d", maxAttempts * delayMs, finalPos);
+    return finalPos;
+}
+
 // Calculate stop price from current market price and stop distance
 static double CalculateStopPrice(int amount, double currentPrice, double stopDist)
 {
@@ -167,6 +204,10 @@ DLLFUNC int BrokerOpen(char* Name, FARPROC fpMessage, FARPROC fpProgress)
         g_bridge = std::make_unique<TcpBridge>();
     }
     
+    // Force output to console for debugging
+    printf("[NT8] Plugin loading v%s\n", PLUGIN_VERSION_STRING);
+    fflush(stdout);
+    
     LogMessage("# NT8 plugin v%s (TCP Bridge for NT8 8.1+)", PLUGIN_VERSION_STRING);
     
     return PLUGIN_VERSION;
@@ -178,6 +219,14 @@ DLLFUNC int BrokerOpen(char* Name, FARPROC fpMessage, FARPROC fpProgress)
 
 DLLFUNC int BrokerLogin(char* User, char* Pwd, char* Type, char* Accounts)
 {
+    // ALWAYS log to file for debugging
+    FILE* debugLog = fopen("C:\\Zorro_2.66\\NT8_debug.log", "a");
+    if (debugLog) {
+        fprintf(debugLog, "[BrokerLogin] Called with User='%s'\n", User ? User : "NULL");
+        fflush(debugLog);
+        fclose(debugLog);
+    }
+    
     // Logout request
     if (!User || !*User) {
         if (g_bridge) {
@@ -215,12 +264,19 @@ DLLFUNC int BrokerLogin(char* User, char* Pwd, char* Type, char* Accounts)
     g_state.account = User;
     g_state.connected = true;
     
-    // Return account name in Accounts parameter
+    // Returned account name in Accounts parameter
     if (Accounts) {
         strcpy_s(Accounts, 1024, User);
     }
     
     LogMessage("# NT8 connected to account: %s (via TCP)", g_state.account.c_str());
+    
+    if (debugLog) {
+        debugLog = fopen("C:\\Zorro_2.66\\NT8_debug.log", "a");
+        fprintf(debugLog, "[BrokerLogin] Connected successfully to: %s\n", User);
+        fflush(debugLog);
+        fclose(debugLog);
+    }
     
     return 1;
 }
@@ -384,16 +440,20 @@ DLLFUNC int BrokerBuy2(char* Asset, int Amount, double StopDist, double Limit,
     double limitPrice = 0.0;
     double stopPrice = 0.0;
     
-    // Priority: Stop orders > Limit orders > Market orders
+    // Entry stop orders: Stop distance indicates trigger price for entry
+    // BUY STOP: Enter long when price rises to stop (stop is ABOVE market)
+    // SELL STOP: Enter short when price falls to stop (stop is BELOW market)
     if (StopDist > 0) {
-        // Stop order - calculate stop price from current market price
+        // Get current market price for stop calculation
         double currentPrice = g_bridge->GetLast(Asset);
         if (currentPrice <= 0) {
             currentPrice = g_bridge->GetAsk(Asset);  // Fallback to ask
         }
         
         if (currentPrice > 0) {
-            // Calculate stop price using helper function
+            // For entry stops, calculate trigger price
+            // BUY: stop above current price (currentPrice + StopDist)
+            // SELL: stop below current price (currentPrice - StopDist)
             stopPrice = CalculateStopPrice(Amount, currentPrice, StopDist);
             
             if (Limit > 0) {
@@ -405,7 +465,7 @@ DLLFUNC int BrokerBuy2(char* Asset, int Amount, double StopDist, double Limit,
                 orderType = "STOP";
             }
             
-            LogDebug("# [BrokerBuy2] Stop order: %s stop @ %.2f (current: %.2f, dist: %.2f)",
+            LogDebug("# [BrokerBuy2] Entry stop order: %s STOP @ %.2f (current: %.2f, dist: %.2f)",
                 action, stopPrice, currentPrice, StopDist);
         } else {
             LogError("Cannot calculate stop price - no market data");
@@ -415,11 +475,16 @@ DLLFUNC int BrokerBuy2(char* Asset, int Amount, double StopDist, double Limit,
         // Limit order (no stop)
         orderType = "LIMIT";
         limitPrice = Limit;
+        LogInfo("# [BrokerBuy2] Limit order: %s @ %.2f (current market: %.2f)", 
+            action, limitPrice, g_bridge->GetLast(Asset));
     }
     // else: Market order (defaults set above)
     
     LogDebug("# [BrokerBuy2] Order params: %s %d %s @ %s (limit=%.2f, stop=%.2f)",
         action, quantity, Asset, orderType, limitPrice, stopPrice);
+    
+    LogInfo("# [BrokerBuy2] Placing order: %s %d %s @ %s (stopPrice=%.2f)",
+        action, quantity, Asset, orderType, stopPrice);
     
     // Get a new order ID from NinjaTrader
     const char* ntOrderId = g_bridge->NewOrderId();
@@ -467,7 +532,7 @@ DLLFUNC int BrokerBuy2(char* Asset, int Amount, double StopDist, double Limit,
     // Create order tracking info
     OrderInfo info;
     info.orderId = orderId;
-    info.instrument = Asset;
+    info.instrument = Asset;  // Store the symbol as passed to us
     info.action = action;
     info.quantity = quantity;
     info.limitPrice = limitPrice;
@@ -508,6 +573,13 @@ DLLFUNC int BrokerBuy2(char* Asset, int Amount, double StopDist, double Limit,
                 if (pFill) *pFill = filled;
                 
                 LogInfo("# Order %d filled: %d @ %.2f", numericId, filled, fillPrice);
+                
+                // Poll for position update (NT needs time to update Positions collection)
+                // Try up to 10 times with 100ms delay = 1 second max wait
+                LogDebug("# Polling for position update...");
+                int expectedChange = (Amount > 0) ? 1 : -1;  // +1 for buy, -1 for sell
+                pollForPosition(Asset, g_state.account.c_str(), expectedChange, 10, 100);
+                
                 break;
             }
         }
@@ -593,11 +665,17 @@ DLLFUNC int BrokerSell2(int nTradeID, int nAmount, double Limit,
         return 0;
     }
     
-    // Update filled quantity from NinjaTrader
+    // ALWAYS update filled quantity from NinjaTrader (don't trust cached value)
     if (!order->orderId.empty()) {
         int currentFilled = g_bridge->Filled(order->orderId.c_str());
         if (currentFilled > 0) {
             order->filled = currentFilled;
+            
+            // Also update average fill price
+            double avgFill = g_bridge->AvgFillPrice(order->orderId.c_str());
+            if (avgFill > 0) {
+                order->avgFillPrice = avgFill;
+            }
         }
     }
     
@@ -613,7 +691,7 @@ DLLFUNC int BrokerSell2(int nTradeID, int nAmount, double Limit,
         // Close all - use filled quantity
         quantity = order->filled;
         
-        // If order->filled is still 0, check current position from NinjaTrader
+        // If filled is still 0, check current position from NinjaTrader
         if (quantity <= 0 && !order->instrument.empty()) {
             int position = g_bridge->MarketPosition(order->instrument.c_str(), g_state.account.c_str());
             quantity = abs(position);
@@ -690,6 +768,12 @@ DLLFUNC int BrokerSell2(int nTradeID, int nAmount, double Limit,
                 }
                 
                 LogMessage("# Trade %d closed: %d @ %.2f", nTradeID, filled, fillPrice);
+                
+                // Poll for position update to confirm close
+                LogDebug("# Polling for position update after close...");
+                int expectedChange = (action == "BUY") ? 1 : -1;  // Inverse of original position
+                pollForPosition(order->instrument.c_str(), g_state.account.c_str(), expectedChange, 10, 100);
+                
                 break;
             }
         }
@@ -719,13 +803,56 @@ DLLFUNC double BrokerCommand(int Command, DWORD dwParameter)
         case GET_POSITION: {
             if (!dwParameter || !g_state.connected) return 0;
             const char* symbol = (const char*)dwParameter;
-            return (double)g_bridge->MarketPosition(symbol, g_state.account.c_str());
+            
+            FILE* debugLog = fopen("C:\\Zorro_2.66\\NT8_debug.log", "a");
+            if (debugLog) {
+                fprintf(debugLog, "[GET_POSITION] Symbol='%s' diagLevel=%d\n", symbol, g_state.diagLevel);
+                fflush(debugLog);
+                fclose(debugLog);
+            }
+            
+            LogInfo("# GET_POSITION query for: %s", symbol);
+            
+            // ALWAYS poll multiple times with delays
+            // NinjaTrader's Positions collection may not update instantly after fills
+            int position = 0;
+            
+            for (int attempt = 0; attempt < 3; attempt++) {
+                position = g_bridge->MarketPosition(symbol, g_state.account.c_str());
+                
+                if (position != 0 || attempt == 2) {
+                    // Found position OR final attempt
+                    break;
+                }
+                
+                // Wait and retry
+                LogDebug("# Position query attempt %d/3: %d (retrying...)", attempt + 1, position);
+                if (!responsiveSleep(200)) break;
+            }
+            
+            LogInfo("# Position returned: %d", position);
+            
+            if (debugLog) {
+                debugLog = fopen("C:\\Zorro_2.66\\NT8_debug.log", "a");
+                fprintf(debugLog, "[GET_POSITION] Returned: %d\n", position);
+                fflush(debugLog);
+                fclose(debugLog);
+            }
+            
+            return (double)position;
         }
         
         case GET_AVGENTRY: {
             if (!dwParameter || !g_state.connected) return 0;
             const char* symbol = (const char*)dwParameter;
-            return g_bridge->AvgEntryPrice(symbol, g_state.account.c_str());
+            
+            LogInfo("# GET_AVGENTRY query for: %s", symbol);
+            
+            double avgEntry = g_bridge->AvgEntryPrice(symbol, g_state.account.c_str());
+            
+            LogInfo("# Avg entry returned: %.2f", avgEntry);
+            
+            return avgEntry;
         }
         
         case SET_ORDERTYPE:
@@ -750,6 +877,14 @@ DLLFUNC double BrokerCommand(int Command, DWORD dwParameter)
         }
         
         case SET_DIAGNOSTICS:
+            {
+                FILE* debugLog = fopen("C:\\Zorro_2.66\\NT8_debug.log", "a");
+                if (debugLog) {
+                    fprintf(debugLog, "[SET_DIAGNOSTICS] Called with level=%d\n", (int)dwParameter);
+                    fflush(debugLog);
+                    fclose(debugLog);
+                }
+            }
             g_state.diagLevel = (int)dwParameter;
             LogMessage("# Diagnostic level set to %d (0=errors, 1=info, 2=debug)", g_state.diagLevel);
             return 1;

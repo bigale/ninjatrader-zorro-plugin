@@ -450,34 +450,61 @@ namespace NinjaTrader.NinjaScript.AddOns
 
         private string HandleGetPosition(string[] parts)
         {
+            Log(LogLevel.DEBUG, "==== HandleGetPosition START ====");
+            Log(LogLevel.TRACE, $"Parts: {string.Join(":", parts)}");
+            
             if (currentAccount == null)
+            {
+                Log(LogLevel.ERROR, "Not logged in");
                 return "ERROR:Not logged in";
+            }
 
             if (parts.Length < 2)
+            {
+                Log(LogLevel.ERROR, "Instrument name missing");
                 return "ERROR:Instrument name required";
+            }
 
             string zorroSymbol = parts[1];
+            Log(LogLevel.DEBUG, $"Querying position for: {zorroSymbol}");
+            
             string nt8Symbol = ConvertToNT8Symbol(zorroSymbol);
+            if (nt8Symbol != zorroSymbol)
+                Log(LogLevel.TRACE, $"Converted: {zorroSymbol} -> {nt8Symbol}");
             
             Instrument instrument = Instrument.GetInstrument(nt8Symbol);
             
             if (instrument == null)
+            {
+                Log(LogLevel.ERROR, $"Instrument '{nt8Symbol}' not found");
                 return "ERROR:Instrument not found";
+            }
 
             // Find position by iterating through positions
             int position = 0;
             double avgPrice = 0;
             
+            Log(LogLevel.TRACE, $"Searching positions for {instrument.FullName}");
+            
             foreach (Position pos in currentAccount.Positions)
             {
+                Log(LogLevel.TRACE, $"Found position: {pos.Instrument.FullName} Qty:{pos.Quantity}");
+                
                 if (pos.Instrument == instrument)
                 {
                     position = pos.Quantity;
                     avgPrice = pos.AveragePrice;
+                    Log(LogLevel.DEBUG, $"MATCHED: Pos={position} AvgPrice={avgPrice}");
                     break;
                 }
             }
 
+            if (position == 0)
+                Log(LogLevel.DEBUG, "No position found (flat)");
+            
+            Log(LogLevel.INFO, $"POSITION QUERY: {zorroSymbol} = {position} contracts @ {avgPrice}");
+            Log(LogLevel.DEBUG, "==== HandleGetPosition END ====");
+            
             return $"POSITION:{position}:{avgPrice}";
         }
 

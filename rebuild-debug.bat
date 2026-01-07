@@ -17,7 +17,7 @@ if errorlevel 1 (
 
 echo.
 echo Installing to Zorro...
-copy /Y Release\NT8.dll C:\Zorro\Plugin\NT8.dll
+copy /Y Release\NT8.dll C:\Zorro_2.66\Plugin\NT8.dll
 if errorlevel 1 (
     echo.
     echo ERROR: Failed to copy DLL

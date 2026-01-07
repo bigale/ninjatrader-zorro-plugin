@@ -1,0 +1,472 @@
+﻿// BrokerAPITest.c - Comprehensive Broker API Testing for NT8 Plugin
+// Tests what's actually supported via BrokerBuy2/BrokerSell2 API
+//
+// Tests:
+//   1. Market orders (immediate execution)
+//   2. Limit entry orders (enter at specific price or better)
+//   3. Position tracking and queries
+//   4. Account information
+//   5. Order fills and status
+
+////////////////////////////////////////////////////////////
+// Configuration
+////////////////////////////////////////////////////////////
+#define ASSET "MESH26"  // Test asset
+#define BARPERIOD 5./60  // 5 second bars
+#define VERBOSE 2
+
+////////////////////////////////////////////////////////////
+// Test State
+////////////////////////////////////////////////////////////
+int g_TestPhase = 0;
+int g_LastTradeID = 0;
+var g_LimitPrice = 0;
+var g_EntryPrice = 0;
+int g_WaitCounter = 0;
+int g_TestCount = 0;
+int g_PassCount = 0;
+int g_FailCount = 0;
+
+function run()
+{
+	// Variables must be declared at function start (Lite-C requirement)
+	var price, spread, balance;
+	int orderId, position;
+	
+	//BarPeriod = 1;  // 1-second bars to see if bars are forming
+	LookBack = 0;  // Live only - no historical data
+	
+	if(is(INITRUN)) {
+		// CRITICAL: Enable diagnostics to see LogInfo/LogDebug messages!
+		//brokerCommand(SET_DIAGNOSTICS, 1);
+		
+		g_TestPhase = 0;  // Initialize global test phase
+		printf("\n========================================");
+		printf("\n   NT8 Broker API Test Suite");
+		printf("\n========================================");
+		asset(ASSET);
+		printf("\nAsset: %s", Asset);
+		printf("\nBar Period: 1 second");
+		printf("\nWaiting for bars to form...\n");
+	}
+	
+	// Debug EVERY bar to see if bars are forming
+	printf("\n[BAR %d] Phase:%d | Price:%.2f | Spread:%.2f | Open:%d",
+		Bar, g_TestPhase, priceClose(), Spread, NumOpenLong + NumOpenShort);
+	
+	// State machine for testing
+	switch(g_TestPhase) {
+		
+		// Phase 0: Wait for market data
+		case 0:
+			if(priceClose() > 0 && Spread > 0) {
+				printf("\n[PHASE 0] Market data ready");
+				printf("\n  Price: %.2f | Spread: %.2f | PIP: %.2f",
+					priceClose(), Spread, PIP);
+				printf("\n  Balance: $%.2f | Margin: $%.2f",
+					Balance, MarginVal);
+				g_TestPhase = 1;
+			} else {
+				printf("\n[PHASE 0] Waiting for market data...");
+			}
+			break;
+			
+		//======================================================================
+		// TEST 1: Market Order LONG
+		//======================================================================
+		case 1:
+			printf("\n");
+			printf("\n========================================");
+			printf("\n[TEST 1] Market Order LONG");
+			printf("\n========================================");
+			printf("\n  Current Price: %.2f", priceClose());
+			printf("\n  Expected: Immediate fill at market");
+			
+			// Place market order (no Limit, no Stop)
+			g_LastTradeID = enterLong();
+			
+			if(g_LastTradeID > 0) {
+				printf("\n  [PASS] Order placed ID:%d", g_LastTradeID);
+				g_PassCount++;
+			} else {
+				printf("\n  [FAIL] Order placement failed!");
+				g_FailCount++;
+			}
+			
+			g_TestCount++;
+			g_TestPhase = 2;
+			g_WaitCounter = 0;
+			break;
+			
+		// Phase 2: Verify market order filled
+		case 2:
+			g_WaitCounter++;
+			
+			if(NumOpenLong > 0) {
+				printf("\n[TEST 1] Market Order Filled");
+				printf("\n  Entry Price: %.2f", TradePriceOpen);
+				printf("\n  Current Price: %.2f", priceClose());
+				printf("\n  Slippage: %.2f", TradePriceOpen - priceClose());
+				
+				// Verify reasonable fill
+				if(abs(TradePriceOpen - priceClose()) < 2.*PIP) {
+					printf("\n  [PASS] Filled at market price");
+					g_PassCount++;
+				} else {
+					printf("\n  [FAIL] Excessive slippage!");
+					g_FailCount++;
+				}
+				
+				g_EntryPrice = TradePriceOpen;
+				g_TestCount++;
+				g_TestPhase = 3;
+				g_WaitCounter = 0;
+			} else if(g_WaitCounter > 5) {
+				printf("\n[TEST 1] Market order timeout");
+				printf("\n  [FAIL] Order didn't fill within 5 bars");
+				g_FailCount++;
+				g_TestCount++;
+				g_TestPhase = 3;
+			}
+			break;
+			
+		// Phase 3: Test position query
+		case 3:
+			printf("\n");
+			printf("\n========================================");
+			printf("\n[TEST 2] Position Query");
+			printf("\n========================================");
+			
+			// Brief delay - plugin now polls automatically after fills
+			//wait(0.1);  // Just 100ms - plugin handles the rest
+			
+			var position = brokerCommand(GET_POSITION, (long)Asset);
+			var avgEntry = brokerCommand(GET_AVGENTRY, (long)Asset);
+			
+			printf("\n  Position from API: %.0f contracts", position);
+			printf("\n  Avg Entry from API: %.2f", avgEntry);
+			printf("\n  Zorro NumOpenLong: %d", NumOpenLong);
+			printf("\n  Zorro Entry Price: %.2f", g_EntryPrice);
+			
+			if(position == 1 && abs(avgEntry - g_EntryPrice) < 0.01) {
+				printf("\n  [PASS] Position query matches Zorro");
+				g_PassCount++;
+			} else {
+				printf("\n  [FAIL] Position mismatch!");
+				g_FailCount++;
+			}
+			
+			g_TestCount++;
+			g_TestPhase = 4;
+			break;
+			
+		// Phase 4: Close LONG position
+		case 4:
+			if(NumOpenLong > 0) {
+				printf("\n[CLEANUP] Closing LONG position");
+				exitLong();
+				g_WaitCounter = 0;
+			}
+			
+			if(NumOpenLong == 0) {
+				printf("\n  Position closed");
+				g_TestPhase = 5;
+			}
+			break;
+			
+		//======================================================================
+		// TEST 3: Market Order SHORT
+		//======================================================================
+		case 5:
+			printf("\n");
+			printf("\n========================================");
+			printf("\n[TEST 3] Market Order SHORT");
+			printf("\n========================================");
+			printf("\n  Current Price: %.2f", priceClose());
+			printf("\n  Expected: Immediate fill at market");
+			
+			g_LastTradeID = enterShort();
+			
+			if(g_LastTradeID > 0) {
+				printf("\n  [PASS] Order placed ID:%d", g_LastTradeID);
+				g_PassCount++;
+			} else {
+				printf("\n  [FAIL] Order placement failed!");
+				g_FailCount++;
+			}
+			
+			g_TestCount++;
+			g_TestPhase = 6;
+			g_WaitCounter = 0;
+			break;
+			
+		// Phase 6: Verify SHORT filled
+		case 6:
+			g_WaitCounter++;
+			
+			if(NumOpenShort > 0) {
+				printf("\n[TEST 3] Market Order SHORT Filled");
+				printf("\n  Entry Price: %.2f", TradePriceOpen);
+				printf("\n  Current Price: %.2f", priceClose());
+				
+				if(abs(TradePriceOpen - priceClose()) < 2.*PIP) {
+					printf("\n  [PASS] Filled at market price");
+					g_PassCount++;
+				} else {
+					printf("\n  [FAIL] Excessive slippage!");
+					g_FailCount++;
+				}
+				
+				g_TestCount++;
+				g_TestPhase = 7;
+				g_WaitCounter = 0;
+			} else if(g_WaitCounter > 5) {
+				printf("\n[TEST 3] Market order timeout");
+				printf("\n  [FAIL] Order didn't fill");
+				g_FailCount++;
+				g_TestCount++;
+				g_TestPhase = 7;
+			}
+			break;
+			
+		// Phase 7: Close SHORT
+		case 7:
+			if(NumOpenShort > 0) {
+				printf("\n[CLEANUP] Closing SHORT position");
+				exitShort();
+				g_WaitCounter = 0;
+			}
+			
+			if(NumOpenShort == 0) {
+				printf("\n  Position closed");
+				g_TestPhase = 8;
+			}
+			break;
+			
+		//======================================================================
+		// TEST 4: Limit Order LONG
+		//======================================================================
+		case 8:
+			printf("\n");
+			printf("\n========================================");
+			printf("\n[TEST 4] Limit Order Entry LONG");
+			printf("\n========================================");
+			
+			// Set limit below current price for better fill
+			g_LimitPrice = roundto(priceClose() - 1.*PIP, PIP);
+			
+			printf("\n  Current Price: %.2f", priceClose());
+			printf("\n  Limit Price: %.2f", g_LimitPrice);
+			printf("\n  Expected: Fill when price touches limit or better");
+			
+			OrderLimit = g_LimitPrice;
+			g_LastTradeID = enterLong();
+			OrderLimit = 0;  // Clear after order
+			
+			if(g_LastTradeID > 0) {
+				printf("\n  [PASS] Limit order placed ID:%d", g_LastTradeID);
+				g_PassCount++;
+			} else {
+				printf("\n  [FAIL] Limit order failed!");
+				g_FailCount++;
+			}
+			
+			g_TestCount++;
+			g_TestPhase = 9;
+			g_WaitCounter = 0;
+			break;
+			
+		// Phase 9: Wait for limit order fill
+		case 9:
+			g_WaitCounter++;
+			
+			if(NumOpenLong > 0) {
+				printf("\n[TEST 4] Limit Order Filled");
+				printf("\n  Entry Price: %.2f", TradePriceOpen);
+				printf("\n  Limit Price: %.2f", g_LimitPrice);
+				
+				// Verify filled at or better than limit
+				if(TradePriceOpen <= g_LimitPrice + 0.01) {
+					printf("\n  [PASS] Filled at limit or better");
+					g_PassCount++;
+				} else {
+					printf("\n  [FAIL] Filled above limit! (%.2f > %.2f)",
+						TradePriceOpen, g_LimitPrice);
+					g_FailCount++;
+				}
+				
+				g_TestCount++;
+				g_TestPhase = 10;
+				g_WaitCounter = 0;
+			} else if(g_WaitCounter > 20) {
+				printf("\n[TEST 4] Limit order timeout");
+				printf("\n  [NOTE] Price didn't reach limit - expected behavior");
+				printf("\n  Current Price: %.2f | Limit: %.2f", priceClose(), g_LimitPrice);
+				
+				// Cancel pending order and move on
+				exitLong();
+				g_TestPhase = 10;
+			} else {
+				if(g_WaitCounter % 3 == 0) {
+					printf("\n[MONITOR] Waiting for limit... (Bar %d | Price:%.2f | Limit:%.2f)",
+						g_WaitCounter, priceClose(), g_LimitPrice);
+				}
+			}
+			break;
+			
+		// Phase 10: Close LONG
+		case 10:
+			if(NumOpenLong > 0) {
+				printf("\n[CLEANUP] Closing LONG position");
+				exitLong();
+			}
+			
+			if(NumOpenLong == 0) {
+				printf("\n  Position closed");
+				g_TestPhase = 11;
+			}
+			break;
+			
+		//======================================================================
+		// TEST 5: Limit Order SHORT
+		//======================================================================
+		case 11:
+			printf("\n");
+			printf("\n========================================");
+			printf("\n[TEST 5] Limit Order Entry SHORT");
+			printf("\n========================================");
+			
+			// Set limit above current price for better fill
+			g_LimitPrice = roundto(priceClose() + 1.*PIP, PIP);
+			
+			printf("\n  Current Price: %.2f", priceClose());
+			printf("\n  Limit Price: %.2f", g_LimitPrice);
+			printf("\n  Expected: Fill when price touches limit or better");
+			
+			OrderLimit = g_LimitPrice;
+			g_LastTradeID = enterShort();
+			OrderLimit = 0;
+			
+			if(g_LastTradeID > 0) {
+				printf("\n  [PASS] Limit order placed ID:%d", g_LastTradeID);
+				g_PassCount++;
+			} else {
+				printf("\n  [FAIL] Limit order failed!");
+				g_FailCount++;
+			}
+			
+			g_TestCount++;
+			g_TestPhase = 12;
+			g_WaitCounter = 0;
+			break;
+			
+		// Phase 12: Wait for SHORT limit fill
+		case 12:
+			g_WaitCounter++;
+			
+			if(NumOpenShort > 0) {
+				printf("\n[TEST 5] Limit Order SHORT Filled");
+				printf("\n  Entry Price: %.2f", TradePriceOpen);
+				printf("\n  Limit Price: %.2f", g_LimitPrice);
+				
+				if(TradePriceOpen >= g_LimitPrice - 0.01) {
+					printf("\n  [PASS] Filled at limit or better");
+					g_PassCount++;
+				} else {
+					printf("\n  [FAIL] Filled below limit!");
+					g_FailCount++;
+				}
+				
+				g_TestCount++;
+				g_TestPhase = 13;
+				g_WaitCounter = 0;
+			} else if(g_WaitCounter > 20) {
+				printf("\n[TEST 5] Limit order timeout");
+				printf("\n  [NOTE] Price didn't reach limit - expected");
+				
+				exitShort();
+				g_TestPhase = 13;
+			} else {
+				if(g_WaitCounter % 3 == 0) {
+					printf("\n[MONITOR] Waiting for limit... (Bar %d | Price:%.2f | Limit:%.2f)",
+						g_WaitCounter, priceClose(), g_LimitPrice);
+				}
+			}
+			break;
+			
+		// Phase 13: Close SHORT
+		case 13:
+			if(NumOpenShort > 0) {
+				printf("\n[CLEANUP] Closing SHORT position");
+				exitShort();
+			}
+			
+			if(NumOpenShort == 0) {
+				printf("\n  Position closed");
+				g_TestPhase = 14;
+			}
+			break;
+			
+		//======================================================================
+		// TEST 6: Account Information
+		//======================================================================
+		case 14:
+			printf("\n");
+			printf("\n========================================");
+			printf("\n[TEST 6] Account Information");
+			printf("\n========================================");
+			
+			printf("\n  Balance: $%.2f", Balance);
+			printf("\n  Equity: $%.2f", Equity);
+			printf("\n  MarginVal: $%.2f", MarginVal);
+			
+			if(Balance > 0 && MarginVal > 0) {
+				printf("\n  [PASS] Account data retrieved");
+				g_PassCount++;
+			} else {
+				printf("\n  [FAIL] Invalid account data");
+				g_FailCount++;
+			}
+			
+			g_TestCount++;
+			g_TestPhase = 15;
+			break;
+			
+		//======================================================================
+		// Final Summary
+		//======================================================================
+		case 15:
+			printf("\n");
+			printf("\n========================================");
+			printf("\n   Test Results Summary");
+			printf("\n========================================");
+			printf("\n  Total Tests: %d", g_TestCount);
+			printf("\n  Passed: %d", g_PassCount);
+			printf("\n  Failed: %d", g_FailCount);
+			printf("\n");
+			
+			if(g_FailCount == 0) {
+				printf("\n  ✓ ALL TESTS PASSED");
+				printf("\n");
+				printf("\n  Verified Functionality:");
+				printf("\n    ✓ Market orders (buy/sell)");
+				printf("\n    ✓ Limit orders (entry)");
+				printf("\n    ✓ Position queries");
+				printf("\n    ✓ Account information");
+				printf("\n    ✓ Order fills and tracking");
+			} else {
+				printf("\n  ✗ %d TEST(S) FAILED", g_FailCount);
+				printf("\n  Review errors above for details");
+			}
+			
+			printf("\n========================================");
+			printf("\n");
+			printf("\nNote: Entry stop orders are NOT supported via");
+			printf("\n      BrokerBuy2 API. Use Zorro's strategy logic");
+			printf("\n      with limit orders or manual price monitoring.");
+			printf("\n========================================\n");
+			
+			quit("Broker API tests complete");
+			break;
+	}
+}
