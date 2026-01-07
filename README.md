@@ -15,7 +15,6 @@ A full-featured Zorro broker plugin for automated trading via NinjaTrader 8.1+ u
 - ✅ **Account Management** - Balance, margin, P&L tracking
 - ✅ **Symbol Conversion** - Automatic futures contract format conversion
 - ✅ **TCP Architecture** - Clean separation, works with NT8 8.1+
-- ✅ **Live-Only Trading** - No historical data dependency
 
 ## 🏗️ Architecture
 
@@ -90,9 +89,6 @@ After installation:
    ```
 
 2. **Configure Zorro account** (`C:\Zorro\History\accounts.csv`):
-   ```csv
-   NT8-Sim,Sim101,,Demo
-   ```
 
 3. **Run test:**
    - Start NinjaTrader 8
@@ -151,7 +147,7 @@ function run()
     asset("MESH26");  // MES March 2026
     
     // Get position
-    int pos = brokerCommand(GET_POSITION, (long)Asset);
+    int pos = brokerCommand(GET_POSITION, SymbolTrade);
     
     // Simple strategy
     if(pos == 0 && priceClose() > priceClose(1))
@@ -223,17 +219,15 @@ See **[Troubleshooting Guide](docs/TROUBLESHOOTING.md)** for complete solutions.
 Test scripts in `scripts/` folder:
 
 - **NT8Test.c** - Comprehensive feature test
-- **SimpleNT8Test.c** - Quick connectivity test
 
 Copy to `C:\Zorro\Strategy\` and run in Zorro.
 
-**Playback Testing:** Use NinjaTrader's Market Replay to test strategies with historical data at accelerated speeds. See **[Playback Testing Guide](docs/PLAYBACK_TESTING.md)** for setup.
+**Playback Testing:** Use NinjaTrader's Simulated Data Feed to test Broker API.
 
 ## 📝 Known Limitations
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Historical Data | ❌ | Use separate data source for backtesting |
 | Contract Specs | ⚠️ | Configure in Zorro asset file |
 | Multi-Account | ⚠️ | One account at a time |
 | Stop Orders | 🚧 | Planned for v1.1 |
@@ -287,8 +281,8 @@ MIT License - See [LICENSE](LICENSE) file
 
 - **Issues:** [GitHub Issues](https://github.com/algoboss710/ninjatrader-zorro-plugin/issues)
 - **Documentation:** [docs/](docs/) folder
-- **Zorro Forum:** [financial-hacker.com](https://financial-hacker.com)
-
+- **Zorro Insight:** [financial-hacker.com](https://financial-hacker.com)
+- **Zorro Forum:** [forum.zorro-project.com](https://opserver.de/ubb7/ubbthreads.php?ubb=cfrm&c=1)
 ---
 
 **⚠️ Trading Risk Disclaimer:** Trading involves substantial risk of loss. This software is provided as-is for educational purposes. Always test thoroughly with simulation accounts before live trading. Past performance does not guarantee future results.
