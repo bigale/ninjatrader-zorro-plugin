@@ -264,25 +264,41 @@ int TcpBridge::MarketPosition(const char* instrument, const char* account)
     std::string cmd = std::string("GETPOSITION:") + instrument;
     std::string response = SendCommand(cmd);
     
-    printf("[TcpBridge] MarketPosition query: %s\n", cmd.c_str());
-    printf("[TcpBridge] MarketPosition response: '%s'\n", response.c_str());
+    // Log to file for debugging
+    FILE* log = fopen("C:\\Zorro_2.66\\TcpBridge_debug.log", "a");
+    if (log) {
+        fprintf(log, "[MarketPosition] query: %s\n", cmd.c_str());
+        fprintf(log, "[MarketPosition] response: '%s'\n", response.c_str());
+        fflush(log);
+    }
     
     // Parse response: POSITION:quantity:avgPrice
     auto parts = SplitResponse(response, ':');
     
-    printf("[TcpBridge] Parsed %zu parts:", parts.size());
-    for (size_t i = 0; i < parts.size(); i++) {
-        printf(" [%zu]='%s'", i, parts[i].c_str());
+    if (log) {
+        fprintf(log, "[MarketPosition] Parsed %zu parts:", parts.size());
+        for (size_t i = 0; i < parts.size(); i++) {
+            fprintf(log, " [%zu]='%s'", i, parts[i].c_str());
+        }
+        fprintf(log, "\n");
     }
-    printf("\n");
     
     if (parts.size() < 3 || parts[0] != "POSITION") {
-        printf("[TcpBridge] Parse FAILED: size=%zu, parts[0]='%s'\n", parts.size(), parts.size() > 0 ? parts[0].c_str() : "NONE");
+        if (log) {
+            fprintf(log, "[MarketPosition] Parse FAILED: size=%zu, parts[0]='%s'\n", 
+                parts.size(), parts.size() > 0 ? parts[0].c_str() : "NONE");
+            fclose(log);
+        }
         return 0;
     }
     
     int position = std::stoi(parts[1]);
-    printf("[TcpBridge] Returning position: %d\n", position);
+    
+    if (log) {
+        fprintf(log, "[MarketPosition] Returning position: %d\n", position);
+        fclose(log);
+    }
+    
     return position;
 }
 
