@@ -339,21 +339,53 @@ int TcpBridge::Command(const char* command, const char* account, const char* ins
 
 int TcpBridge::Filled(const char* orderId)
 {
-    // This would need order tracking in the AddOn
-    // For now, return 0 (not implemented)
-    return 0;
+    if (!orderId) return 0;
+    
+    std::string cmd = std::string("GETORDERSTATUS:") + orderId;
+    std::string response = SendCommand(cmd);
+    
+    // Parse response: ORDERSTATUS:orderId:state:filled:avgFillPrice
+    auto parts = SplitResponse(response, ':');
+    if (parts.size() < 4 || parts[0] != "ORDERSTATUS") {
+        return 0;
+    }
+    
+    return std::stoi(parts[3]);  // filled quantity
 }
 
 double TcpBridge::AvgFillPrice(const char* orderId)
 {
-    // This would need order tracking in the AddOn
-    return 0.0;
+    if (!orderId) return 0.0;
+    
+    std::string cmd = std::string("GETORDERSTATUS:") + orderId;
+    std::string response = SendCommand(cmd);
+    
+    // Parse response: ORDERSTATUS:orderId:state:filled:avgFillPrice
+    auto parts = SplitResponse(response, ':');
+    if (parts.size() < 5 || parts[0] != "ORDERSTATUS") {
+        return 0.0;
+    }
+    
+    return std::stod(parts[4]);  // avg fill price
 }
 
 const char* TcpBridge::OrderStatus(const char* orderId)
 {
-    // This would need order tracking in the AddOn
-    return "Unknown";
+    if (!orderId) return "Unknown";
+    
+    std::string cmd = std::string("GETORDERSTATUS:") + orderId;
+    std::string response = SendCommand(cmd);
+    
+    // Parse response: ORDERSTATUS:orderId:state:filled:avgFillPrice
+    auto parts = SplitResponse(response, ':');
+    if (parts.size() < 3 || parts[0] != "ORDERSTATUS") {
+        return "Unknown";
+    }
+    
+    // Store in static buffer (not thread-safe but OK for single-threaded Zorro)
+    static char statusBuffer[64];
+    strncpy_s(statusBuffer, sizeof(statusBuffer), parts[2].c_str(), _TRUNCATE);
+    return statusBuffer;
 }
 
 int TcpBridge::ConfirmOrders(int confirm)

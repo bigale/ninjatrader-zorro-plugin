@@ -37,7 +37,7 @@ namespace NinjaTrader.NinjaScript.AddOns
         
         private Account currentAccount;
         private Dictionary<string, Instrument> subscribedInstruments = new Dictionary<string, Instrument>();
-        private List<Order> activeOrders = new List<Order>();
+        private Dictionary<string, Order> activeOrders = new Dictionary<string, Order>();  // Changed from List to Dictionary
         
         // Logging configuration
         private LogLevel currentLogLevel = LogLevel.INFO;  // Default to INFO
@@ -240,6 +240,9 @@ namespace NinjaTrader.NinjaScript.AddOns
                     
                     case "SETLOGLEVEL":
                         return HandleSetLogLevel(parts);
+                    
+                    case "GETORDERSTATUS":
+                        return HandleGetOrderStatus(parts);
 
                     default:
                         return $"ERROR:Unknown command: {cmd}";
@@ -598,7 +601,7 @@ namespace NinjaTrader.NinjaScript.AddOns
                 
                 Log(LogLevel.INFO, $"ORDER PLACED: {action} {quantity} {zorroSymbol} @ {orderType} (ID:{order.OrderId})");
                 
-                activeOrders.Add(order);
+                activeOrders[order.OrderId] = order;  // Store in dictionary
                 orderCount++;
                 
                 Log(LogLevel.DEBUG, "==== PlaceOrder SUCCESS ====");
@@ -621,14 +624,40 @@ namespace NinjaTrader.NinjaScript.AddOns
                 return "ERROR:Order ID required";
 
             string orderId = parts[1];
-            Order order = activeOrders.FirstOrDefault(o => o.OrderId == orderId);
-
-            if (order == null)
+            
+            if (!activeOrders.ContainsKey(orderId))
                 return "ERROR:Order not found";
+            
+            Order order = activeOrders[orderId];
 
             currentAccount.Cancel(new[] { order });
             Log(LogLevel.INFO, $"ORDER CANCELLED: {orderId}");
             return $"OK:Order {orderId} cancelled";
+        }
+        
+        private string HandleGetOrderStatus(string[] parts)
+        {
+            // GETORDERSTATUS:orderId
+            // Returns: ORDERSTATUS:orderId:state:filled:avgFillPrice
+            
+            if (parts.Length < 2)
+                return "ERROR:Order ID required";
+            
+            string orderId = parts[1];
+            
+            if (!activeOrders.ContainsKey(orderId))
+                return "ERROR:Order not found";
+            
+            Order order = activeOrders[orderId];
+            
+            // Get order state and fill information
+            string state = order.OrderState.ToString();
+            int filled = order.Filled;
+            double avgFillPrice = order.AverageFillPrice;
+            
+            Log(LogLevel.TRACE, $"Order {orderId}: State={state} Filled={filled} AvgPrice={avgFillPrice}");
+            
+            return $"ORDERSTATUS:{orderId}:{state}:{filled}:{avgFillPrice}";
         }
         
         private string HandleSetLogLevel(string[] parts)
