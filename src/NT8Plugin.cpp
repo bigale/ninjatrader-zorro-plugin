@@ -527,12 +527,19 @@ DLLFUNC int BrokerBuy2(char* Asset, int Amount, double StopDist, double Limit,
         return 0;
     }
     
-    LogInfo("# [BrokerBuy2] Order placed successfully!");
+    // Get the NT order ID from the response
+    const char* ntActualOrderId = g_bridge->GetLastNtOrderId();
+    if (!ntActualOrderId || !*ntActualOrderId) {
+        LogError("Failed to get NT order ID from response");
+        return 0;
+    }
     
-    // Create order tracking info
+    LogInfo("# [BrokerBuy2] Order placed successfully! NT ID: %s", ntActualOrderId);
+    
+    // Create order tracking info using the REAL NT order ID
     OrderInfo info;
-    info.orderId = orderId;
-    info.instrument = Asset;  // Store the symbol as passed to us
+    info.orderId = ntActualOrderId;  // Use the NT GUID, not our ZORRO_xxxx
+    info.instrument = Asset;
     info.action = action;
     info.quantity = quantity;
     info.limitPrice = limitPrice;
@@ -542,10 +549,10 @@ DLLFUNC int BrokerBuy2(char* Asset, int Amount, double StopDist, double Limit,
     info.status = "Submitted";
     
     // Register order and get numeric ID
-    int numericId = RegisterOrder(orderId.c_str(), info);
+    int numericId = RegisterOrder(ntActualOrderId, info);
     
     LogInfo("# Order %d (%s): %s %d %s @ %s",
-        numericId, orderId.c_str(), action, quantity, Asset,
+        numericId, ntActualOrderId, action, quantity, Asset,
         orderType);
     
     // For market orders, wait briefly for fill
@@ -557,9 +564,9 @@ DLLFUNC int BrokerBuy2(char* Asset, int Amount, double StopDist, double Limit,
                 break;  // User wants to abort
             }
             
-            int filled = g_bridge->Filled(orderId.c_str());
+            int filled = g_bridge->Filled(ntActualOrderId);  // Use NT order ID
             if (filled > 0) {
-                double fillPrice = g_bridge->AvgFillPrice(orderId.c_str());
+                double fillPrice = g_bridge->AvgFillPrice(ntActualOrderId);
                 
                 // Update order info
                 OrderInfo* orderInfo = GetOrder(numericId);
@@ -746,6 +753,15 @@ DLLFUNC int BrokerSell2(int nTradeID, int nAmount, double Limit,
         return 0;
     }
     
+    // Get the actual NT order ID from the response
+    const char* ntCloseOrderId = g_bridge->GetLastNtOrderId();
+    if (!ntCloseOrderId || !*ntCloseOrderId) {
+        LogError("Failed to get NT close order ID");
+        return 0;
+    }
+    
+    LogInfo("# Close order placed: NT ID %s", ntCloseOrderId);
+    
     // Wait for fill (market orders)
     if (strcmp(orderType, "MARKET") == 0) {
         for (int i = 0; i < 10; i++) {
@@ -754,9 +770,9 @@ DLLFUNC int BrokerSell2(int nTradeID, int nAmount, double Limit,
                 break;  // User wants to abort
             }
             
-            int filled = g_bridge->Filled(closeOrderId.c_str());
+            int filled = g_bridge->Filled(ntCloseOrderId);  // Use NT order ID
             if (filled > 0) {
-                double fillPrice = g_bridge->AvgFillPrice(closeOrderId.c_str());
+                double fillPrice = g_bridge->AvgFillPrice(ntCloseOrderId);
                 
                 if (pClose) *pClose = fillPrice;
                 if (pFill) *pFill = filled;

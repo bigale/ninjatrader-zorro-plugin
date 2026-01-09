@@ -341,21 +341,24 @@ int TcpBridge::Command(const char* command, const char* account, const char* ins
         cmd << "PLACEORDER:" << action << ":" << instrument << ":" << quantity 
             << ":" << orderType << ":" << limitPrice << ":" << stopPrice;
         
-        // Debug logging
-        printf("[TcpBridge] Sending order command: %s\n", cmd.str().c_str());
-        printf("[TcpBridge] Details:\n");
-        printf("  Action: %s\n", action);
-        printf("  Instrument: %s\n", instrument);
-        printf("  Quantity: %d\n", quantity);
-        printf("  OrderType: %s\n", orderType);
-        printf("  LimitPrice: %.2f\n", limitPrice);
-        printf("  StopPrice: %.2f\n", stopPrice);
-        
         std::string response = SendCommand(cmd.str());
         
-        printf("[TcpBridge] Response: %s\n", response.c_str());
+        // Extract NT order ID from response: "ORDER:fa41b14fff514c69b5749bba57471eb8"
+        auto parts = SplitResponse(response, ':');
+        if (parts.size() >= 2 && parts[0] == "ORDER") {
+            m_lastNtOrderId = parts[1];  // Store the NT GUID
+            
+            FILE* log = fopen("C:\\Zorro_2.66\\TcpBridge_debug.log", "a");
+            if (log) {
+                fprintf(log, "[Command] PLACEORDER response: %s\n", response.c_str());
+                fprintf(log, "[Command] Extracted NT order ID: %s\n", m_lastNtOrderId.c_str());
+                fclose(log);
+            }
+            
+            return 0;  // Success
+        }
         
-        return (response.find("ORDER:") != std::string::npos) ? 0 : -1;
+        return -1;  // Failed
     }
     else if (strcmp(command, "CANCEL") == 0) {
         cmd << "CANCELORDER:" << orderId;

@@ -58,6 +58,7 @@ public:
     
     // Orders
     const char* NewOrderId();
+    const char* GetLastNtOrderId() const { return m_lastNtOrderId.c_str(); }
     int Command(const char* command, const char* account, const char* instrument,
                 const char* action, int quantity, const char* orderType,
                 double limitPrice, double stopPrice, const char* timeInForce,
@@ -88,6 +89,7 @@ private:
     std::string m_lastResponse;
     char m_orderIdBuffer[64];
     int m_nextOrderId;
+    std::string m_lastNtOrderId;  // Store NT order ID from last PLACEORDER
     
     // Communication helpers
     bool InitializeWinsock();
