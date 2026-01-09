@@ -264,13 +264,26 @@ int TcpBridge::MarketPosition(const char* instrument, const char* account)
     std::string cmd = std::string("GETPOSITION:") + instrument;
     std::string response = SendCommand(cmd);
     
+    printf("[TcpBridge] MarketPosition query: %s\n", cmd.c_str());
+    printf("[TcpBridge] MarketPosition response: '%s'\n", response.c_str());
+    
     // Parse response: POSITION:quantity:avgPrice
     auto parts = SplitResponse(response, ':');
+    
+    printf("[TcpBridge] Parsed %zu parts:", parts.size());
+    for (size_t i = 0; i < parts.size(); i++) {
+        printf(" [%zu]='%s'", i, parts[i].c_str());
+    }
+    printf("\n");
+    
     if (parts.size() < 3 || parts[0] != "POSITION") {
+        printf("[TcpBridge] Parse FAILED: size=%zu, parts[0]='%s'\n", parts.size(), parts.size() > 0 ? parts[0].c_str() : "NONE");
         return 0;
     }
     
-    return std::stoi(parts[1]);
+    int position = std::stoi(parts[1]);
+    printf("[TcpBridge] Returning position: %d\n", position);
+    return position;
 }
 
 double TcpBridge::AvgEntryPrice(const char* instrument, const char* account)
