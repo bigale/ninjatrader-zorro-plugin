@@ -806,36 +806,28 @@ DLLFUNC double BrokerCommand(int Command, DWORD dwParameter)
             
             LogInfo("# GET_POSITION query for: %s", symbol);
             
-            // Poll multiple times - NinjaTrader's Positions collection updates asynchronously
-            // We need to give it time after order fills
+            // Try multiple times with longer delays - NinjaTrader Positions collection
+            // updates asynchronously and can take 500ms+ to reflect order fills
             int position = 0;
-            int maxAttempts = 5;  // Increased from 3 to 5
-            int delayMs = 200;
+            int maxAttempts = 10;  // Increased to 10 attempts
+            int delayMs = 250;      // Increased to 250ms per attempt (2.5 seconds total)
             
             for (int attempt = 0; attempt < maxAttempts; attempt++) {
                 position = g_bridge->MarketPosition(symbol, g_state.account.c_str());
                 
                 LogDebug("# Position query attempt %d/%d: %d", attempt + 1, maxAttempts, position);
                 
-                // If we got a non-zero position, we're done
-                if (position != 0) {
-                    LogInfo("# Position found: %d (after %d ms)", position, (attempt + 1) * delayMs);
-                    break;
-                }
-                
-                // If this is the last attempt, don't wait
-                if (attempt == maxAttempts - 1) {
-                    break;
-                }
-                
-                // Wait before retrying
-                if (!responsiveSleep(delayMs)) {
-                    LogInfo("# Position poll cancelled by user");
-                    break;
+                // Don't break early - always poll the full duration to ensure
+                // we get the latest position after recent order fills
+                if (attempt < maxAttempts - 1) {
+                    if (!responsiveSleep(delayMs)) {
+                        LogInfo("# Position poll cancelled by user");
+                        break;
+                    }
                 }
             }
             
-            LogInfo("# Position returned: %d", position);
+            LogInfo("# Position returned: %d (after %d ms)", position, maxAttempts * delayMs);
             
             return (double)position;
         }
