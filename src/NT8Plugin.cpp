@@ -804,40 +804,38 @@ DLLFUNC double BrokerCommand(int Command, DWORD dwParameter)
             if (!dwParameter || !g_state.connected) return 0;
             const char* symbol = (const char*)dwParameter;
             
-            FILE* debugLog = fopen("C:\\Zorro_2.66\\NT8_debug.log", "a");
-            if (debugLog) {
-                fprintf(debugLog, "[GET_POSITION] Symbol='%s' diagLevel=%d\n", symbol, g_state.diagLevel);
-                fflush(debugLog);
-                fclose(debugLog);
-            }
-            
             LogInfo("# GET_POSITION query for: %s", symbol);
             
-            // ALWAYS poll multiple times with delays
-            // NinjaTrader's Positions collection may not update instantly after fills
+            // Poll multiple times - NinjaTrader's Positions collection updates asynchronously
+            // We need to give it time after order fills
             int position = 0;
+            int maxAttempts = 5;  // Increased from 3 to 5
+            int delayMs = 200;
             
-            for (int attempt = 0; attempt < 3; attempt++) {
+            for (int attempt = 0; attempt < maxAttempts; attempt++) {
                 position = g_bridge->MarketPosition(symbol, g_state.account.c_str());
                 
-                if (position != 0 || attempt == 2) {
-                    // Found position OR final attempt
+                LogDebug("# Position query attempt %d/%d: %d", attempt + 1, maxAttempts, position);
+                
+                // If we got a non-zero position, we're done
+                if (position != 0) {
+                    LogInfo("# Position found: %d (after %d ms)", position, (attempt + 1) * delayMs);
                     break;
                 }
                 
-                // Wait and retry
-                LogDebug("# Position query attempt %d/3: %d (retrying...)", attempt + 1, position);
-                if (!responsiveSleep(200)) break;
+                // If this is the last attempt, don't wait
+                if (attempt == maxAttempts - 1) {
+                    break;
+                }
+                
+                // Wait before retrying
+                if (!responsiveSleep(delayMs)) {
+                    LogInfo("# Position poll cancelled by user");
+                    break;
+                }
             }
             
             LogInfo("# Position returned: %d", position);
-            
-            if (debugLog) {
-                debugLog = fopen("C:\\Zorro_2.66\\NT8_debug.log", "a");
-                fprintf(debugLog, "[GET_POSITION] Returned: %d\n", position);
-                fflush(debugLog);
-                fclose(debugLog);
-            }
             
             return (double)position;
         }

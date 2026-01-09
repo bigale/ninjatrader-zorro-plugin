@@ -484,17 +484,17 @@ namespace NinjaTrader.NinjaScript.AddOns
             int position = 0;
             double avgPrice = 0;
             
-            Log(LogLevel.TRACE, $"Searching positions for {instrument.FullName}");
+            Log(LogLevel.TRACE, $"Searching {currentAccount.Positions.Count()} positions for {instrument.FullName}");
             
             foreach (Position pos in currentAccount.Positions)
             {
-                Log(LogLevel.TRACE, $"Found position: {pos.Instrument.FullName} Qty:{pos.Quantity}");
+                Log(LogLevel.TRACE, $"  Position: {pos.Instrument.FullName} Qty:{pos.Quantity} MarketPos:{pos.MarketPosition} AvgPrice:{pos.AveragePrice}");
                 
                 if (pos.Instrument == instrument)
                 {
                     position = pos.Quantity;
                     avgPrice = pos.AveragePrice;
-                    Log(LogLevel.DEBUG, $"MATCHED: Pos={position} AvgPrice={avgPrice}");
+                    Log(LogLevel.DEBUG, $"MATCHED: Instrument={instrument.FullName} Pos={position} AvgPrice={avgPrice}");
                     break;
                 }
             }
