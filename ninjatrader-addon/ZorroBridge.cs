@@ -495,9 +495,17 @@ namespace NinjaTrader.NinjaScript.AddOns
                 
                 if (pos.Instrument == instrument)
                 {
-                    position = pos.Quantity;
+                    // NinjaTrader Position.Quantity is ALWAYS positive
+                    // We need to check MarketPosition to determine sign
+                    if (pos.MarketPosition == MarketPosition.Long)
+                        position = pos.Quantity;  // Positive for long
+                    else if (pos.MarketPosition == MarketPosition.Short)
+                        position = -pos.Quantity;  // Negative for short
+                    else
+                        position = 0;  // Flat
+                    
                     avgPrice = pos.AveragePrice;
-                    Log(LogLevel.DEBUG, $"MATCHED: Instrument={instrument.FullName} Pos={position} AvgPrice={avgPrice}");
+                    Log(LogLevel.DEBUG, $"MATCHED: Instrument={instrument.FullName} MarketPos={pos.MarketPosition} Qty={pos.Quantity} SignedPos={position} AvgPrice={avgPrice}");
                     break;
                 }
             }
