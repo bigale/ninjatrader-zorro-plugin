@@ -831,16 +831,16 @@ DLLFUNC double BrokerCommand(int Command, DWORD dwParameter)
             if (!dwParameter || !g_state.connected) return 0;
             const char* symbol = (const char*)dwParameter;
             
-            LogInfo("# GET_POSITION query for: %s", symbol);
-            
             // **CRITICAL: Return cached position immediately**
             // Never return transient 0 - always return last known value
             int cachedPosition = g_state.positions[symbol];
+            int absolutePosition = abs(cachedPosition);
             
-            LogInfo("# Position returned: %d (from cache)", abs(cachedPosition));
+            LogInfo("# GET_POSITION query for: %s (cached: %d signed, returning: %d absolute)", 
+                symbol, cachedPosition, absolutePosition);
             
             // Return ABSOLUTE VALUE (Zorro handles direction via NumOpenLong/NumOpenShort)
-            return (double)abs(cachedPosition);
+            return (double)absolutePosition;
         }
         
         case GET_AVGENTRY: {
