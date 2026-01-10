@@ -576,10 +576,16 @@ DLLFUNC int BrokerBuy2(char* Asset, int Amount, double StopDist, double Limit,
                     orderInfo->status = "Filled";
                 }
                 
+                // **CRITICAL: Update position cache IMMEDIATELY on fill**
+                // This ensures GET_POSITION returns correct value instantly
+                int signedQty = (Amount > 0) ? filled : -filled;  // Positive for long, negative for short
+                g_state.positions[Asset] += signedQty;
+                
+                LogInfo("# Order %d filled: %d @ %.2f (cached position now: %d)", 
+                    numericId, filled, fillPrice, g_state.positions[Asset]);
+                
                 if (pPrice) *pPrice = fillPrice;
                 if (pFill) *pFill = filled;
-                
-                LogInfo("# Order %d filled: %d @ %.2f", numericId, filled, fillPrice);
                 
                 // Poll for position update (NT needs time to update Positions collection)
                 // Try up to 10 times with 100ms delay = 1 second max wait
@@ -783,7 +789,12 @@ DLLFUNC int BrokerSell2(int nTradeID, int nAmount, double Limit,
                     *pProfit = (fillPrice - order->avgFillPrice) * filled * direction;
                 }
                 
-                LogMessage("# Trade %d closed: %d @ %.2f", nTradeID, filled, fillPrice);
+                // **CRITICAL: Update position cache on close fill**
+                int signedQty = (action == "BUY") ? filled : -filled;
+                g_state.positions[order->instrument] += signedQty;
+                
+                LogMessage("# Trade %d closed: %d @ %.2f (cached position now: %d)", 
+                    nTradeID, filled, fillPrice, g_state.positions[order->instrument]);
                 
                 // Poll for position update to confirm close
                 LogDebug("# Polling for position update after close...");
@@ -822,30 +833,14 @@ DLLFUNC double BrokerCommand(int Command, DWORD dwParameter)
             
             LogInfo("# GET_POSITION query for: %s", symbol);
             
-            // Try multiple times with longer delays - NinjaTrader Positions collection
-            // updates asynchronously and can take 500ms+ to reflect order fills
-            int position = 0;
-            int maxAttempts = 10;  // Increased to 10 attempts
-            int delayMs = 250;      // Increased to 250ms per attempt (2.5 seconds total)
+            // **CRITICAL: Return cached position immediately**
+            // Never return transient 0 - always return last known value
+            int cachedPosition = g_state.positions[symbol];
             
-            for (int attempt = 0; attempt < maxAttempts; attempt++) {
-                position = g_bridge->MarketPosition(symbol, g_state.account.c_str());
-                
-                LogDebug("# Position query attempt %d/%d: %d", attempt + 1, maxAttempts, position);
-                
-                // Don't break early - always poll the full duration to ensure
-                // we get the latest position after recent order fills
-                if (attempt < maxAttempts - 1) {
-                    if (!responsiveSleep(delayMs)) {
-                        LogInfo("# Position poll cancelled by user");
-                        break;
-                    }
-                }
-            }
+            LogInfo("# Position returned: %d (from cache)", abs(cachedPosition));
             
-            LogInfo("# Position returned: %d (after %d ms)", position, maxAttempts * delayMs);
-            
-            return (double)position;
+            // Return ABSOLUTE VALUE (Zorro handles direction via NumOpenLong/NumOpenShort)
+            return (double)abs(cachedPosition);
         }
         
         case GET_AVGENTRY: {

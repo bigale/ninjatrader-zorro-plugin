@@ -82,6 +82,9 @@ struct PluginState {
     std::string account;            // Current account name
     std::string currentSymbol;      // Last subscribed symbol
     
+    // Position cache - CRITICAL: Updated immediately on fills
+    std::map<std::string, int> positions;  // symbol -> signed position (negative for short)
+    
     // Order tracking
     std::map<int, OrderInfo> orders;            // Track orders by numeric ID
     std::map<std::string, int> orderIdMap;      // Map NT order ID to numeric ID
@@ -94,6 +97,7 @@ struct PluginState {
         connected = false;
         account.clear();
         currentSymbol.clear();
+        positions.clear();  // Clear position cache
         orders.clear();
         orderIdMap.clear();
         nextOrderNum = 1000;
