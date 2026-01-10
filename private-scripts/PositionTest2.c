@@ -21,7 +21,7 @@ function run()
 	
 	printf("\nZorro NumOpenLong: %d", NumOpenLong);
 	printf("\nZorro NumOpenShort: %d", NumOpenShort);
-	printf("\nZorro NumOpen: %d", NumOpen);
+	printf("\nZorro NumOpenTotal: %d", NumOpenTotal);
 	
 	if(NumOpenLong == 1) {
 		printf("\n? LONG position CORRECT (NumOpenLong = 1)");
@@ -35,7 +35,7 @@ function run()
 	
 	printf("\nAfter exitLong:");
 	printf("\n  NumOpenLong: %d", NumOpenLong);
-	printf("\n  NumOpen: %d", NumOpen);
+	printf("\n  NumOpenTotal: %d", NumOpenTotal);
 	
 	// Test 2: Enter SHORT
 	printf("\n\n--- Test SHORT Position ---");
@@ -45,7 +45,7 @@ function run()
 	
 	printf("\nZorro NumOpenLong: %d", NumOpenLong);
 	printf("\nZorro NumOpenShort: %d", NumOpenShort);
-	printf("\nZorro NumOpen: %d", NumOpen);
+	printf("\nZorro NumOpenTotal: %d", NumOpenTotal);
 	
 	if(NumOpenShort == 1) {
 		printf("\n? SHORT position CORRECT (NumOpenShort = 1)");
@@ -59,7 +59,7 @@ function run()
 	
 	printf("\nAfter exitShort:");
 	printf("\n  NumOpenShort: %d", NumOpenShort);
-	printf("\n  NumOpen: %d", NumOpen);
+	printf("\n  NumOpenTotal: %d", NumOpenTotal);
 	
 	printf("\n\n=== Summary ===");
 	printf("\nZorro's position tracking works if:");
