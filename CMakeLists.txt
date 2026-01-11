@@ -72,3 +72,11 @@ if(BUILD_ZORRO_TESTS)
     message(STATUS "Building Zorro C++ test scripts")
     add_subdirectory(zorro-tests)
 endif()
+
+# Option to build C++ strategy examples
+option(BUILD_EXAMPLES "Build example C++ strategies" OFF)
+
+if(BUILD_EXAMPLES)
+    message(STATUS "Building C++ strategy examples")
+    add_subdirectory(examples/SimpleCppStrategy)
+endif()
