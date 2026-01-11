@@ -64,3 +64,11 @@ set_target_properties(NT8 PROPERTIES
 install(TARGETS NT8
     RUNTIME DESTINATION Plugin
 )
+
+# Option to build Zorro C++ test scripts
+option(BUILD_ZORRO_TESTS "Build Zorro C++ test DLLs" ON)
+
+if(BUILD_ZORRO_TESTS)
+    message(STATUS "Building Zorro C++ test scripts")
+    add_subdirectory(zorro-tests)
+endif()
