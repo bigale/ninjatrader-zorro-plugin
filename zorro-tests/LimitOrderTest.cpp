@@ -2,7 +2,7 @@
 // Tests limit order placement, monitoring, and cancellation
 // Build as DLL and load in Zorro
 
-#include <trading.h>
+#include <trading_zorro.h>  // Changed from trading.h
 #include "TestHelpers.h"
 
 using namespace ZorroTest;

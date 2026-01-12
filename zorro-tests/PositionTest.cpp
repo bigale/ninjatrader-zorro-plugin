@@ -2,7 +2,7 @@
 // Tests position tracking using Zorro's built-in variables
 // Build as DLL and load in Zorro just like a .c script
 
-#include <trading.h>
+#include <trading_zorro.h>  // Changed from trading.h
 #include "TestHelpers.h"
 
 using namespace ZorroTest;

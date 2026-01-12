@@ -578,7 +578,7 @@ DLLFUNC int BrokerBuy2(char* Asset, int Amount, double StopDist, double Limit,
                 
                 // **CRITICAL: Update position cache IMMEDIATELY on fill**
                 // This ensures GET_POSITION returns correct value instantly
-                int signedQty = (Amount > 0) ? filled : -filled;  // Positive for long, negative for short
+                int signedQty = (Amount > 0) ? filled : -filled;  // Positive for long, negative for sell
                 g_state.positions[Asset] += signedQty;
                 
                 LogInfo("# Order %d filled: %d @ %.2f (cached position now: %d)", 
@@ -593,16 +593,21 @@ DLLFUNC int BrokerBuy2(char* Asset, int Amount, double StopDist, double Limit,
                 int expectedChange = (Amount > 0) ? 1 : -1;  // +1 for buy, -1 for sell
                 pollForPosition(Asset, g_state.account.c_str(), expectedChange, 10, 100);
                 
-                break;
+                // Market order filled - return positive ID
+                LogDebug("# [BrokerBuy2] Returning filled order ID: %d", numericId);
+                return numericId;  // Positive = filled
             }
         }
+        
+        // Market order placed but not filled yet - shouldn't happen normally
+        LogInfo("# Market order %d not filled after 1 second", numericId);
+        return -numericId;  // Negative = pending
     } else {
-        // Stop and limit orders: don't wait for fill
-        LogDebug("# [BrokerBuy2] %s order placed, will fill when triggered", orderType);
+        // Stop and limit orders: NOT filled immediately - return NEGATIVE ID
+        LogInfo("# [BrokerBuy2] %s order placed, pending fill", orderType);
+        LogDebug("# [BrokerBuy2] Returning pending order ID: -%d", numericId);
+        return -numericId;  // Negative ID = pending order
     }
-    
-    LogDebug("# [BrokerBuy2] Returning order ID: %d", numericId);
-    return numericId;
 }
 
 //=============================================================================
@@ -616,7 +621,10 @@ DLLFUNC int BrokerTrade(int nTradeID, double* pOpen, double* pClose,
         return NAY;
     }
     
-    OrderInfo* order = GetOrder(nTradeID);
+    // Handle negative IDs (pending orders)
+    int orderId = abs(nTradeID);
+    
+    OrderInfo* order = GetOrder(orderId);
     if (!order) {
         return NAY;
     }
@@ -672,22 +680,39 @@ DLLFUNC int BrokerSell2(int nTradeID, int nAmount, double Limit,
         return 0;
     }
     
-    OrderInfo* order = GetOrder(nTradeID);
+    // Handle negative IDs (pending orders)
+    int orderId = abs(nTradeID);
+    
+    OrderInfo* order = GetOrder(orderId);
     if (!order) {
-        LogError("Order %d not found", nTradeID);
+        LogError("Order %d not found", orderId);
         return 0;
     }
-    
+
     // ALWAYS update filled quantity from NinjaTrader (don't trust cached value)
     if (!order->orderId.empty()) {
         int currentFilled = g_bridge->Filled(order->orderId.c_str());
+        
         if (currentFilled > 0) {
+            // Order has filled
             order->filled = currentFilled;
             
             // Also update average fill price
             double avgFill = g_bridge->AvgFillPrice(order->orderId.c_str());
             if (avgFill > 0) {
                 order->avgFillPrice = avgFill;
+            }
+        } else {
+            // Order is still pending (not filled) - CANCEL IT instead of closing
+            LogInfo("# Order %d is still pending (filled=0), canceling instead of closing", orderId);
+            
+            int cancelResult = g_bridge->CancelOrder(order->orderId.c_str());
+            if (cancelResult == 0) {
+                LogInfo("# Order %d cancelled successfully", orderId);
+                return nTradeID;  // Success
+            } else {
+                LogError("# Failed to cancel order %d", orderId);
+                return 0;  // Failed
             }
         }
     }
@@ -867,13 +892,15 @@ DLLFUNC double BrokerCommand(int Command, DWORD dwParameter)
             return 1;
             
         case DO_CANCEL: {
-            // Cancel specific order
-            int orderId = (int)dwParameter;
+            // Cancel specific order - handle negative IDs from pending orders
+            int orderId = abs((int)dwParameter);
             OrderInfo* order = GetOrder(orderId);
             if (order) {
+                LogInfo("# Canceling order %d (NT ID: %s)", orderId, order->orderId.c_str());
                 int result = g_bridge->CancelOrder(order->orderId.c_str());
                 return (result == 0) ? 1 : 0;
             }
+            LogError("# Order %d not found for cancellation", orderId);
             return 0;
         }
         

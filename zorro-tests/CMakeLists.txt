@@ -10,17 +10,7 @@ set(ZORRO_STRATEGY_DIR "${ZORRO_PATH}/Strategy" CACHE PATH "Path to Zorro Strate
 message(STATUS "Zorro path: ${ZORRO_PATH}")
 message(STATUS "Zorro Strategy folder: ${ZORRO_STRATEGY_DIR}")
 
-# Common test helpers library (static lib linked into each test DLL)
-add_library(ZorroTestHelpers STATIC
-    common/TestHelpers.cpp
-)
-
-target_include_directories(ZorroTestHelpers PUBLIC
-    common
-    ${CMAKE_SOURCE_DIR}/include  # For trading.h
-)
-
-target_compile_features(ZorroTestHelpers PUBLIC cxx_std_17)
+# Note: TestHelpers is now header-only, no static library needed
 
 #=============================================================================
 # Helper function to create a Zorro test DLL
@@ -31,15 +21,10 @@ function(add_zorro_test TEST_NAME)
         ${TEST_NAME}.cpp
     )
     
-    # Link against test helpers
-    target_link_libraries(${TEST_NAME} PRIVATE
-        ZorroTestHelpers
-    )
-    
     # Include directories
     target_include_directories(${TEST_NAME} PRIVATE
         ${CMAKE_SOURCE_DIR}/include  # For trading.h
-        common                        # For TestHelpers.h
+        common                        # For TestHelpers.h (header-only)
     )
     
     # C++17 standard
