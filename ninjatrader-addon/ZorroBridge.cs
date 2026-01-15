@@ -7,6 +7,7 @@
 #region Using declarations
 using System;
 using System.Collections.Generic;
+using System.Collections.Concurrent;  // NEW: For ConcurrentDictionary
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
@@ -14,6 +15,8 @@ using System.Text;
 using System.Threading;
 using NinjaTrader.Cbi;
 using NinjaTrader.NinjaScript;
+using NinjaTrader.Data;  // For BarsRequest
+using NinjaTrader.NinjaScript.BarsTypes;  // For BarsPeriod and BarsPeriodType
 #endregion
 
 namespace NinjaTrader.NinjaScript.AddOns
@@ -36,8 +39,10 @@ namespace NinjaTrader.NinjaScript.AddOns
         private const int PORT = 8888;
         
         private Account currentAccount;
-        private Dictionary<string, Instrument> subscribedInstruments = new Dictionary<string, Instrument>();
-        private Dictionary<string, Order> activeOrders = new Dictionary<string, Order>();  // Changed from List to Dictionary
+        // **FIXED: Use thread-safe ConcurrentDictionary instead of Dictionary**
+        // Multiple client threads can access these concurrently
+        private ConcurrentDictionary<string, Instrument> subscribedInstruments = new ConcurrentDictionary<string, Instrument>();
+        private ConcurrentDictionary<string, Order> activeOrders = new ConcurrentDictionary<string, Order>();
         
         // Logging configuration
         private LogLevel currentLogLevel = LogLevel.INFO;  // Default to INFO
@@ -243,6 +248,12 @@ namespace NinjaTrader.NinjaScript.AddOns
                     
                     case "GETORDERSTATUS":
                         return HandleGetOrderStatus(parts);
+                    
+                    case "GETHISTORY":
+                        return HandleGetHistory(parts);
+                    
+                    case "GETINSTRUMENTS":
+                        return HandleGetInstruments();
 
                     default:
                         return $"ERROR:Unknown command: {cmd}";
@@ -288,87 +299,35 @@ namespace NinjaTrader.NinjaScript.AddOns
             if (parts.Length < 2)
                 return "ERROR:Instrument name required";
 
-            string zorroSymbol = parts[1];
-            string nt8Symbol = ConvertToNT8Symbol(zorroSymbol);
+            string instrumentName = parts[1];
             
-            if (nt8Symbol != zorroSymbol)
-                Log(LogLevel.DEBUG, $"Converted: {zorroSymbol} -> {nt8Symbol}");
+            Log(LogLevel.DEBUG, $"Subscribe request: {instrumentName}");
             
-            Instrument instrument = Instrument.GetInstrument(nt8Symbol);
+            Instrument instrument = Instrument.GetInstrument(instrumentName);
             if (instrument == null)
             {
-                Log(LogLevel.ERROR, $"Instrument '{nt8Symbol}' not found");
-                return $"ERROR:Instrument '{nt8Symbol}' not found in NinjaTrader";
+                Log(LogLevel.ERROR, $"Instrument '{instrumentName}' not found");
+                return $"ERROR:Instrument '{instrumentName}' not found in NinjaTrader";
             }
 
             Log(LogLevel.TRACE, $"Found: {instrument.FullName}");
             
             if (instrument.MarketData == null)
             {
-                Log(LogLevel.WARN, $"MarketData is null for {nt8Symbol} - connect to data feed");
+                Log(LogLevel.WARN, $"MarketData is null for {instrumentName} - connect to data feed");
             }
 
-            subscribedInstruments[zorroSymbol] = instrument;
-            Log(LogLevel.INFO, $"Subscribed to {nt8Symbol}");
+            subscribedInstruments[instrumentName] = instrument;
             
-            return $"OK:Subscribed to {nt8Symbol}";
-        }
-        
-        private string ConvertMonthCode(char code)
-        {
-            // CME month codes to month numbers
-            switch (char.ToUpper(code))
-            {
-                case 'F': return "01"; // January
-                case 'G': return "02"; // February
-                case 'H': return "03"; // March
-                case 'J': return "04"; // April
-                case 'K': return "05"; // May
-                case 'M': return "06"; // June
-                case 'N': return "07"; // July
-                case 'Q': return "08"; // August
-                case 'U': return "09"; // September
-                case 'V': return "10"; // October
-                case 'X': return "11"; // November
-                case 'Z': return "12"; // December
-                default: return null;
-            }
-        }
-        
-        private string ConvertToNT8Symbol(string zorroSymbol)
-        {
-            // Convert various Zorro symbol formats to NinjaTrader format
-            // Handles: "MES 0326", "MESH26" -> "MES 03-26"
+            // Get contract specifications
+            double tickSize = instrument.MasterInstrument.TickSize;
+            double pointValue = instrument.MasterInstrument.PointValue;
             
-            if (zorroSymbol.Contains("-"))
-                return zorroSymbol; // Already in NT8 format
+            Log(LogLevel.INFO, $"Subscribed to {instrumentName}");
+            Log(LogLevel.DEBUG, $"Contract specs: TickSize={tickSize} PointValue={pointValue}");
             
-            if (zorroSymbol.Contains(" ") && !zorroSymbol.Contains("-"))
-            {
-                // Format: "MES 0326" with space
-                string[] symbolParts = zorroSymbol.Split(' ');
-                if (symbolParts.Length == 2 && symbolParts[1].Length == 4)
-                {
-                    string month = symbolParts[1].Substring(0, 2);
-                    string year = symbolParts[1].Substring(2, 2);
-                    return $"{symbolParts[0]} {month}-{year}";
-                }
-            }
-            else if (!zorroSymbol.Contains(" ") && zorroSymbol.Length >= 6)
-            {
-                // Format: "MESH26" (symbol + month letter + year)
-                string symbol = zorroSymbol.Substring(0, zorroSymbol.Length - 3);
-                char monthCode = zorroSymbol[zorroSymbol.Length - 3];
-                string year = zorroSymbol.Substring(zorroSymbol.Length - 2);
-                
-                string month = ConvertMonthCode(monthCode);
-                if (month != null)
-                {
-                    return $"{symbol} {month}-{year}";
-                }
-            }
-            
-            return zorroSymbol; // Return as-is if no conversion needed
+            // Return format: OK:Subscribed:{instrument}:{tickSize}:{pointValue}
+            return $"OK:Subscribed:{instrumentName}:{tickSize}:{pointValue}";
         }
 
         private string HandleUnsubscribe(string[] parts)
@@ -377,7 +336,9 @@ namespace NinjaTrader.NinjaScript.AddOns
                 return "ERROR:Instrument name required";
 
             string instrumentName = parts[1];
-            subscribedInstruments.Remove(instrumentName);
+            // **FIXED: ConcurrentDictionary uses TryRemove instead of Remove**
+            Instrument removedInstrument;
+            subscribedInstruments.TryRemove(instrumentName, out removedInstrument);
             
             return $"OK:Unsubscribed from {instrumentName}";
         }
@@ -448,7 +409,57 @@ namespace NinjaTrader.NinjaScript.AddOns
             double buyingPower = currentAccount.Get(AccountItem.BuyingPower, Currency.UsDollar);
             double realizedPnL = currentAccount.Get(AccountItem.RealizedProfitLoss, Currency.UsDollar);
 
-            return $"ACCOUNT:{cashValue}:{buyingPower}:{realizedPnL}";
+            // Calculate unrealized P&L from open positions
+            double unrealizedPnL = 0;
+            
+            foreach (Position pos in currentAccount.Positions)
+            {
+                if (pos.MarketPosition != MarketPosition.Flat)
+                {
+                    try
+                    {
+                        // Get current market price
+                        double currentPrice = 0;
+                        if (pos.Instrument.MarketData != null && pos.Instrument.MarketData.Last != null)
+                        {
+                            currentPrice = pos.Instrument.MarketData.Last.Price;
+                        }
+                        
+                        if (currentPrice > 0)
+                        {
+                            double entryPrice = pos.AveragePrice;
+                            int quantity = pos.Quantity;
+                            double pointValue = pos.Instrument.MasterInstrument.PointValue;
+                            
+                            // Calculate P&L based on position direction
+                            if (pos.MarketPosition == MarketPosition.Long)
+                            {
+                                // Long: profit when price goes up
+                                unrealizedPnL += (currentPrice - entryPrice) * quantity * pointValue;
+                            }
+                            else if (pos.MarketPosition == MarketPosition.Short)
+                            {
+                                // Short: profit when price goes down
+                                unrealizedPnL += (entryPrice - currentPrice) * quantity * pointValue;
+                            }
+                            
+
+                            Log(LogLevel.TRACE, $"UnrealizedPnL: {pos.Instrument.FullName} {pos.MarketPosition} " +
+                                $"Entry:{entryPrice} Current:{currentPrice} Qty:{quantity} PV:{pointValue} " +
+                                $"Contribution:{(pos.MarketPosition == MarketPosition.Long ? (currentPrice - entryPrice) : (entryPrice - currentPrice)) * quantity * pointValue}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log(LogLevel.WARN, $"Error calculating unrealized P&L for {pos.Instrument.FullName}: {ex.Message}");
+                    }
+                }
+            }
+
+            Log(LogLevel.DEBUG, $"Account: Cash={cashValue} BuyPwr={buyingPower} RealPnL={realizedPnL} UnrealPnL={unrealizedPnL}");
+
+            // Return format: ACCOUNT:cashValue:buyingPower:realizedPnL:unrealizedPnL
+            return $"ACCOUNT:{cashValue}:{buyingPower}:{realizedPnL}:{unrealizedPnL}";
         }
 
         private string HandleGetPosition(string[] parts)
@@ -468,18 +479,14 @@ namespace NinjaTrader.NinjaScript.AddOns
                 return "ERROR:Instrument name required";
             }
 
-            string zorroSymbol = parts[1];
-            Log(LogLevel.DEBUG, $"Querying position for: {zorroSymbol}");
+            string instrumentName = parts[1];
+            Log(LogLevel.DEBUG, $"Querying position for: {instrumentName}");
             
-            string nt8Symbol = ConvertToNT8Symbol(zorroSymbol);
-            if (nt8Symbol != zorroSymbol)
-                Log(LogLevel.TRACE, $"Converted: {zorroSymbol} -> {nt8Symbol}");
-            
-            Instrument instrument = Instrument.GetInstrument(nt8Symbol);
+            Instrument instrument = Instrument.GetInstrument(instrumentName);
             
             if (instrument == null)
             {
-                Log(LogLevel.ERROR, $"Instrument '{nt8Symbol}' not found");
+                Log(LogLevel.ERROR, $"Instrument '{instrumentName}' not found");
                 return "ERROR:Instrument not found";
             }
 
@@ -513,7 +520,7 @@ namespace NinjaTrader.NinjaScript.AddOns
             if (position == 0)
                 Log(LogLevel.DEBUG, "No position found (flat)");
             
-            Log(LogLevel.INFO, $"POSITION QUERY: {zorroSymbol} = {position} contracts @ {avgPrice}");
+            Log(LogLevel.INFO, $"POSITION QUERY: {instrumentName} = {position} contracts @ {avgPrice}");
             Log(LogLevel.DEBUG, "==== HandleGetPosition END ====");
             
             return $"POSITION:{position}:{avgPrice}";
@@ -540,26 +547,22 @@ namespace NinjaTrader.NinjaScript.AddOns
             try
             {
                 string action = parts[1].ToUpper();
-                string zorroSymbol = parts[2];
+                string instrumentName = parts[2];
                 int quantity = int.Parse(parts[3]);
                 string orderType = parts[4].ToUpper();
                 double limitPrice = parts.Length > 5 ? double.Parse(parts[5]) : 0;
                 double stopPrice = parts.Length > 6 ? double.Parse(parts[6]) : 0;
 
-                Log(LogLevel.DEBUG, $"Order: {action} {quantity} {zorroSymbol} @ {orderType}");
+                Log(LogLevel.DEBUG, $"Order: {action} {quantity} {instrumentName} @ {orderType}");
                 if (limitPrice > 0)
                     Log(LogLevel.DEBUG, $"Limit: {limitPrice}");
                 if (stopPrice > 0)
                     Log(LogLevel.DEBUG, $"Stop: {stopPrice}");
 
-                string nt8Symbol = ConvertToNT8Symbol(zorroSymbol);
-                if (nt8Symbol != zorroSymbol)
-                    Log(LogLevel.TRACE, $"Converted: {zorroSymbol} -> {nt8Symbol}");
-
-                Instrument instrument = Instrument.GetInstrument(nt8Symbol);
+                Instrument instrument = Instrument.GetInstrument(instrumentName);
                 if (instrument == null)
                 {
-                    Log(LogLevel.ERROR, $"Instrument '{nt8Symbol}' not found");
+                    Log(LogLevel.ERROR, $"Instrument '{instrumentName}' not found");
                     return "ERROR:Instrument not found";
                 }
                 
@@ -603,11 +606,10 @@ namespace NinjaTrader.NinjaScript.AddOns
                     null
                 );
 
-                Log(LogLevel.TRACE, $"Created order: {order.OrderId}");
-                
+                Log(LogLevel.TRACE, $"Created order: {order.OrderId}");                
                 currentAccount.Submit(new[] { order });
                 
-                Log(LogLevel.INFO, $"ORDER PLACED: {action} {quantity} {zorroSymbol} @ {orderType} (ID:{order.OrderId})");
+                Log(LogLevel.INFO, $"ORDER PLACED: {action} {quantity} {instrumentName} @ {orderType} (ID:{order.OrderId})");
                 
                 activeOrders[order.OrderId] = order;  // Store in dictionary
                 orderCount++;
@@ -688,6 +690,206 @@ namespace NinjaTrader.NinjaScript.AddOns
             catch
             {
                 return $"ERROR:Invalid log level '{levelStr}'. Use: TRACE/DEBUG/INFO/WARN/ERROR";
+            }
+        }
+        
+        private string HandleGetHistory(string[] parts)
+        {
+            // GETHISTORY:symbol:startDate:endDate:barMinutes:maxBars
+            // Returns: HISTORY:{numBars}|time,open,high,low,close,volume|...
+            
+            Log(LogLevel.DEBUG, "==== HandleGetHistory START ====");
+            Log(LogLevel.TRACE, $"Parts: {string.Join(":", parts)}");
+            
+            if (currentAccount == null)
+            {
+                Log(LogLevel.ERROR, "Not logged in");
+                return "ERROR:Not logged in";
+            }
+            
+            if (parts.Length < 6)
+            {
+                Log(LogLevel.ERROR, $"Invalid format (expected 6 parts, got {parts.Length})");
+                return "ERROR:Invalid history request format";
+            }
+            
+            try
+            {
+                string instrumentName = parts[1];
+                double startOleDate = double.Parse(parts[2]);
+                double endOleDate = double.Parse(parts[3]);
+                int barMinutes = int.Parse(parts[4]);
+                int maxBars = int.Parse(parts[5]);
+                
+                Log(LogLevel.DEBUG, $"History request: {instrumentName} {barMinutes}min bars, max {maxBars}");
+                
+                // Convert OLE dates to DateTime (OLE epoch is Dec 30, 1899)
+                DateTime startDate = DateTime.FromOADate(startOleDate);
+                DateTime endDate = DateTime.FromOADate(endOleDate);
+                
+                Log(LogLevel.DEBUG, $"Date range: {startDate} to {endDate}");
+                
+                // Get instrument
+                Instrument instrument = Instrument.GetInstrument(instrumentName);
+                if (instrument == null)
+                {
+                    Log(LogLevel.ERROR, $"Instrument '{instrumentName}' not found");
+                    return "ERROR:Instrument not found";
+                }
+                
+                Log(LogLevel.TRACE, $"Instrument: {instrument.FullName}");
+                
+                // Build bars response synchronously
+                StringBuilder barsData = new StringBuilder();
+                int barCount = 0;
+                bool requestComplete = false;
+                string errorMsg = null;
+                
+                // Create bars request
+                BarsRequest barsRequest = new BarsRequest(instrument, startDate, endDate);
+                barsRequest.BarsPeriod = new BarsPeriod
+                {
+                    BarsPeriodType = BarsPeriodType.Minute,
+                    Value = barMinutes
+                };
+                
+                // Request bars with callback
+                barsRequest.Request((request, errorCode, errorMessage) =>
+                {
+                    if (errorCode != ErrorCode.NoError)
+                    {
+                        errorMsg = $"Bars request failed: {errorCode} - {errorMessage}";
+                        requestComplete = true;
+                        return;
+                    }
+                    
+                    if (request.Bars == null || request.Bars.Count == 0)
+                    {
+                        Log(LogLevel.WARN, "No bars returned");
+                        requestComplete = true;
+                        return;
+                    }
+                    
+                    // Return ALL bars available (don't limit artificially)
+                    // Zorro will handle chunking if needed
+                    Log(LogLevel.DEBUG, $"NT8 returned {request.Bars.Count} bars");
+                    
+                    for (int i = 0; i < request.Bars.Count; i++)
+                    {
+                        // Convert time to OLE date
+                        double oleTime = request.Bars.GetTime(i).ToOADate();
+                        
+                        // Format: time,open,high,low,close,volume
+                        barsData.Append($"{oleTime},{request.Bars.GetOpen(i)},{request.Bars.GetHigh(i)},{request.Bars.GetLow(i)},{request.Bars.GetClose(i)},{request.Bars.GetVolume(i)}|");
+                        barCount++;
+                    }
+                    
+                    requestComplete = true;
+                });
+                
+                // Wait for request to complete (max 30 seconds)
+                int timeout = 0;
+                while (!requestComplete && timeout < 300)
+                {
+                    System.Threading.Thread.Sleep(100);
+                    timeout++;
+                }
+                
+                if (!requestComplete)
+                {
+                    Log(LogLevel.ERROR, "Bars request timeout");
+                    return "ERROR:Bars request timeout";
+                }
+                
+                if (errorMsg != null)
+                {
+                    Log(LogLevel.ERROR, errorMsg);
+                    return $"ERROR:{errorMsg}";
+                }
+                
+                if (barCount == 0)
+                {
+                    Log(LogLevel.WARN, "No bars available for requested period");
+                    return "HISTORY:0";
+                }
+                
+                // Remove trailing |
+                if (barsData.Length > 0)
+                    barsData.Length--;
+                
+                Log(LogLevel.INFO, $"Returning {barCount} bars for {instrumentName}");
+                Log(LogLevel.DEBUG, "==== HandleGetHistory SUCCESS ====");                
+                return $"HISTORY:{barCount}|{barsData}";
+            }
+            catch (Exception ex)
+            {
+                Log(LogLevel.ERROR, $"HandleGetHistory failed: {ex.Message}");
+                Log(LogLevel.TRACE, $"Stack: {ex.StackTrace}");
+                return $"ERROR:{ex.Message}";
+            }
+        }
+        
+        private string HandleGetInstruments()
+        {
+            // GETINSTRUMENTS
+            // Returns: INSTRUMENTS:{count}|symbol,tickSize,pointValue,lastPrice,exchange|...
+            
+            Log(LogLevel.DEBUG, "==== HandleGetInstruments START ====");            
+            try
+            {
+                StringBuilder instrumentsData = new StringBuilder();
+                int count = 0;
+                
+                // Get all instruments from NinjaTrader
+                foreach (Instrument instrument in Instrument.All)
+                {
+                    try
+                    {
+                        // Skip instruments without market data
+                        if (instrument.MarketData == null)
+                            continue;
+                        
+                        // Get last price to verify instrument is tradeable/has data
+                        double lastPrice = 0;
+                        if (instrument.MarketData.Last != null)
+                            lastPrice = instrument.MarketData.Last.Price;
+                        
+                        // Skip if no price data (not actively trading)
+                        if (lastPrice <= 0)
+                            continue;
+                        
+                        // Get contract specifications
+                        double tickSize = instrument.MasterInstrument.TickSize;
+                        double pointValue = instrument.MasterInstrument.PointValue;
+                        string symbol = instrument.FullName;
+                        string instrumentType = instrument.MasterInstrument.InstrumentType.ToString();
+                        
+                        // Format: symbol,tickSize,pointValue,lastPrice,instrumentType
+                        instrumentsData.Append($"{symbol},{tickSize},{pointValue},{lastPrice},{instrumentType}|");
+                        count++;
+                        
+                        Log(LogLevel.TRACE, $"Instrument: {symbol} Price:{lastPrice} Tick:{tickSize} Value:{pointValue} Type:{instrumentType}");
+                    }
+                    catch (Exception ex)
+                    {
+                        Log(LogLevel.TRACE, $"Skipping instrument {instrument.FullName}: {ex.Message}");
+                        continue;
+                    }
+                }
+                
+                // Remove trailing |
+                if (instrumentsData.Length > 0)
+                    instrumentsData.Length--;
+                
+                Log(LogLevel.INFO, $"Returning {count} instruments with market data");
+                Log(LogLevel.DEBUG, "==== HandleGetInstruments SUCCESS ====");                
+                return $"INSTRUMENTS:{count}|{instrumentsData}";
+            }
+            catch (Exception ex)
+            {
+                Log(LogLevel.ERROR, $"HandleGetInstruments failed: {ex.Message}");
+                Log(LogLevel.TRACE, $"Stack: {ex.StackTrace}");
+                return $"ERROR:{ex.Message}";
             }
         }
     }

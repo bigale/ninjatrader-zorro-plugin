@@ -67,6 +67,17 @@ struct OrderInfo {
 };
 
 //=============================================================================
+// Asset specification structure
+//=============================================================================
+
+struct AssetSpec {
+    double tickSize;      // Minimum price increment (pip size)
+    double pointValue;    // Dollar value per point (pip cost)
+    
+    AssetSpec() : tickSize(0), pointValue(0) {}
+};
+
+//=============================================================================
 // Plugin State - consolidates all global configuration and state
 //=============================================================================
 
@@ -85,6 +96,9 @@ struct PluginState {
     // Position cache - CRITICAL: Updated immediately on fills
     std::map<std::string, int> positions;  // symbol -> signed position (negative for short)
     
+    // Asset specifications cache
+    std::map<std::string, AssetSpec> assetSpecs;  // symbol -> contract specs
+    
     // Order tracking
     std::map<int, OrderInfo> orders;            // Track orders by numeric ID
     std::map<std::string, int> orderIdMap;      // Map NT order ID to numeric ID
@@ -98,6 +112,7 @@ struct PluginState {
         account.clear();
         currentSymbol.clear();
         positions.clear();  // Clear position cache
+        assetSpecs.clear(); // Clear asset specs
         orders.clear();
         orderIdMap.clear();
         nextOrderNum = 1000;
@@ -125,6 +140,8 @@ DLLFUNC int BrokerTrade(int nTradeID, double* pOpen, double* pClose,
     double* pCost, double* pProfit);
 DLLFUNC int BrokerSell2(int nTradeID, int nAmount, double Limit,
     double* pClose, double* pCost, double* pProfit, int* pFill);
+DLLFUNC int BrokerHistory2(char* Asset, DATE tStart, DATE tEnd,
+    int nTickMinutes, int nTicks, T6* ticks);
 DLLFUNC double BrokerCommand(int Command, DWORD dwParameter);
 
 #endif // NT8PLUGIN_H

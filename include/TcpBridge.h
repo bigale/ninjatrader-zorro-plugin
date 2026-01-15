@@ -31,6 +31,7 @@ public:
     
     // Low-level command interface (public for direct use)
     std::string SendCommand(const std::string& command);
+    std::vector<std::string> SplitResponse(const std::string& response, char delimiter);  // Now public
     
     // Connection
     int Connected(int showMessage = 0);
@@ -51,6 +52,7 @@ public:
     double CashValue(const char* account);
     double BuyingPower(const char* account);
     double RealizedPnL(const char* account);
+    double UnrealizedPnL(const char* account);  // NEW: Get unrealized P&L from open positions
     
     // Position
     int MarketPosition(const char* instrument, const char* account);
@@ -94,9 +96,6 @@ private:
     // Communication helpers
     bool InitializeWinsock();
     void CleanupWinsock();
-    
-    // Parsing helpers
-    std::vector<std::string> SplitResponse(const std::string& response, char delimiter);
 };
 
 #endif // TCPBRIDGE_H

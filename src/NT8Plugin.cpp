@@ -12,6 +12,7 @@
 #include <map>
 #include <vector>
 #include <sstream>
+#include <iomanip>
 
 //=============================================================================
 // Global State
@@ -328,20 +329,45 @@ DLLFUNC int BrokerAsset(char* Asset, double* pPrice, double* pSpread,
     
     // Subscribe mode (pPrice == NULL) - just subscribe to data
     if (!pPrice) {
-        int result = g_bridge->SubscribeMarketData(Asset);
-        if (result == 0) {
+        // Send SUBSCRIBE command and parse response
+        std::string cmd = std::string("SUBSCRIBE:") + Asset;
+        std::string response = g_bridge->SendCommand(cmd);
+        
+        if (response.find("OK") != std::string::npos) {
             g_state.currentSymbol = Asset;
+            
+            // **NEW: Parse contract specs from SUBSCRIBE response**
+            // Format: OK:Subscribed:{instrument}:{tickSize}:{pointValue}
+            auto parts = g_bridge->SplitResponse(response, ':');
+            
+            if (parts.size() >= 5 && parts[0] == "OK") {
+                try {
+                    double tickSize = std::stod(parts[3]);
+                    double pointValue = std::stod(parts[4]);
+                    
+                    // Store contract specifications
+                    g_state.assetSpecs[Asset].tickSize = tickSize;
+                    g_state.assetSpecs[Asset].pointValue = pointValue;
+                    
+                    LogInfo("# Asset specs for %s: tick=%.4f value=%.2f", Asset, tickSize, pointValue);
+                }
+                catch (...) {
+                    LogInfo("# Could not parse asset specs for %s, using defaults", Asset);
+                }
+            }
+            
             LogMessage("# Subscribed to %s", Asset);
             return 1;
         }
+        
         LogError("Failed to subscribe to %s", Asset);
         return 0;
     }
     
     // Make sure we're subscribed
     if (g_state.currentSymbol != Asset) {
-        g_bridge->SubscribeMarketData(Asset);
-        g_state.currentSymbol = Asset;
+        // Need to subscribe first - call ourselves recursively
+        BrokerAsset(Asset, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
         Sleep(100);  // Brief delay for data to arrive
     }
     
@@ -364,12 +390,27 @@ DLLFUNC int BrokerAsset(char* Asset, double* pPrice, double* pSpread,
         *pVolume = volume;
     }
     
-    // Contract specs - these need to be set based on instrument
-    // NinjaTrader ATI doesn't expose contract specs, so we use defaults
-    // User should configure these in Zorro's asset file
+    // **FIXED: Return actual contract specs from NT8**
+    if (pPip) {
+        auto it = g_state.assetSpecs.find(Asset);
+        if (it != g_state.assetSpecs.end() && it->second.tickSize > 0) {
+            *pPip = it->second.tickSize;
+            LogDebug("# Returning tick size for %s: %.4f", Asset, it->second.tickSize);
+        } else {
+            *pPip = 0;  // Let Zorro use asset file (fallback)
+        }
+    }
     
-    if (pPip) *pPip = 0;           // Let Zorro use asset file
-    if (pPipCost) *pPipCost = 0;   // Let Zorro use asset file
+    if (pPipCost) {
+        auto it = g_state.assetSpecs.find(Asset);
+        if (it != g_state.assetSpecs.end() && it->second.pointValue > 0) {
+            *pPipCost = it->second.pointValue;
+            LogDebug("# Returning point value for %s: %.2f", Asset, it->second.pointValue);
+        } else {
+            *pPipCost = 0;  // Let Zorro use asset file (fallback)
+        }
+    }
+    
     if (pLotAmount) *pLotAmount = 1;
     if (pMargin) *pMargin = 0;
     
@@ -391,20 +432,22 @@ DLLFUNC int BrokerAccount(char* Account, double* pBalance, double* pTradeVal,
     // Switch account if specified
     const char* acct = (Account && *Account) ? Account : g_state.account.c_str();
     
-    // Get account values
+    // Get account values (now includes unrealized P&L as 4th field)
     double cashValue = g_bridge->CashValue(acct);
     double buyingPower = g_bridge->BuyingPower(acct);
     double realizedPnL = g_bridge->RealizedPnL(acct);
+    double unrealizedPnL = g_bridge->UnrealizedPnL(acct);  // NEW: Get unrealized P&L
     
     if (pBalance) {
         *pBalance = cashValue;
     }
     
     if (pTradeVal) {
-        // TradeVal is typically unrealized P&L
-        // NinjaTrader ATI doesn't directly expose this
-        // Could calculate from positions if needed
-        *pTradeVal = realizedPnL;
+        // **FIXED: Return UNREALIZED P&L (from open positions)**
+        // This is what Zorro manual specifies - current P&L from open trades
+        *pTradeVal = unrealizedPnL;
+        
+        LogDebug("# Account P&L: Unrealized=%.2f, Realized=%.2f", unrealizedPnL, realizedPnL);
     }
     
     if (pMarginVal) {
@@ -832,6 +875,167 @@ DLLFUNC int BrokerSell2(int nTradeID, int nAmount, double Limit,
     }
     
     return nTradeID;
+}
+
+//=============================================================================
+// BrokerHistory2 - Download historical price data
+//=============================================================================
+
+DLLFUNC int BrokerHistory2(char* Asset, DATE tStart, DATE tEnd,
+    int nTickMinutes, int nTicks, T6* ticks)
+{
+    char msg[256];
+    
+    // ALWAYS log to file for debugging
+    FILE* histLog = fopen("C:\\Zorro_2.66\\BrokerHistory2_debug.log", "a");
+    if (histLog) {
+        fprintf(histLog, "\n==== BrokerHistory2 CALL ====\n");
+        fprintf(histLog, "Asset: %s\n", Asset ? Asset : "NULL");
+        fprintf(histLog, "tStart: %.8f\n", tStart);
+        fprintf(histLog, "tEnd: %.8f\n", tEnd);
+        fprintf(histLog, "nTickMinutes: %d\n", nTickMinutes);
+        fprintf(histLog, "nTicks (buffer): %d\n", nTicks);
+        fflush(histLog);
+    }
+    
+    sprintf_s(msg, sizeof(msg), "# [HIST] Called: Asset=%s, buf=%d", Asset ? Asset : "NULL", nTicks);
+    LogMessage(msg);
+    
+    if (!g_bridge || !g_state.connected || !Asset || !ticks || nTicks <= 0) {
+        LogError("[HIST] Invalid parameters");
+        if (histLog) {
+            fprintf(histLog, "ERROR: Invalid parameters\n");
+            fclose(histLog);
+        }
+        return 0;
+    }
+    
+    // Build command
+    std::ostringstream cmd;
+    cmd << "GETHISTORY:" << Asset << ":" 
+        << std::fixed << std::setprecision(8) << tStart << ":"
+        << tEnd << ":" << nTickMinutes << ":" << nTicks;
+    
+    if (histLog) {
+        fprintf(histLog, "Sending: %s\n", cmd.str().c_str());
+        fflush(histLog);
+    }
+    
+    std::string response = g_bridge->SendCommand(cmd.str());
+    
+    sprintf_s(msg, sizeof(msg), "# [HIST] Response: %zu bytes", response.length());
+    LogMessage(msg);
+    
+    if (histLog) {
+        fprintf(histLog, "Response size: %zu bytes\n", response.length());
+        fflush(histLog);
+    }
+    
+    // Parse: HISTORY:{numBars}|time,o,h,l,c,v|...
+    auto parts = g_bridge->SplitResponse(response, '|');
+    
+    sprintf_s(msg, sizeof(msg), "# [HIST] Split: %zu parts", parts.size());
+    LogMessage(msg);
+    
+    if (histLog) {
+        fprintf(histLog, "Split into: %zu parts\n", parts.size());
+        fflush(histLog);
+    }
+    
+    if (parts.size() < 1 || parts[0].find("HISTORY:") != 0) {
+        LogError("[HIST] Bad response");
+        if (histLog) {
+            fprintf(histLog, "ERROR: Bad response format\n");
+            if (parts.size() > 0) {
+                fprintf(histLog, "First part: %s\n", parts[0].c_str());
+            }
+            fclose(histLog);
+        }
+        return 0;
+    }
+    
+    // Extract count
+    size_t colonPos = parts[0].find(':');
+    if (colonPos == std::string::npos) {
+        LogError("[HIST] Malformed");
+        if (histLog) {
+            fprintf(histLog, "ERROR: Malformed header\n");
+            fclose(histLog);
+        }
+        return 0;
+    }
+    
+    int barCount = std::stoi(parts[0].substr(colonPos + 1));
+    
+    sprintf_s(msg, sizeof(msg), "# [HIST] NT8=%d bars, buf=%d", barCount, nTicks);
+    LogMessage(msg);
+    
+    if (histLog) {
+        fprintf(histLog, "NT8 says: %d bars available\n", barCount);
+        fprintf(histLog, "Buffer size: %d\n", nTicks);
+    }
+    
+    if (barCount == 0) {
+        if (histLog) {
+            fprintf(histLog, "No bars available\n");
+            fclose(histLog);
+        }
+        return 0;
+    }
+    
+    // Parse bars - SKIP bars before tStart!
+    int loaded = 0;
+    int skipped = 0;
+    
+    for (size_t i = 1; i < parts.size() && loaded < nTicks; i++) {
+        if (parts[i].empty()) continue;
+        
+        auto fields = g_bridge->SplitResponse(parts[i], ',');
+        if (fields.size() < 6) continue;
+        
+        try {
+            double barTime = std::stod(fields[0]);
+            
+            // CRITICAL: Skip bars before requested start time
+            if (barTime < tStart) {
+                skipped++;
+                continue;
+            }
+            
+            // Also skip bars after requested end time
+            if (barTime > tEnd) {
+                break;  // All remaining bars will be after tEnd
+            }
+            
+            ticks[loaded].time = barTime;
+            ticks[loaded].fOpen = (float)std::stod(fields[1]);
+            ticks[loaded].fHigh = (float)std::stod(fields[2]);
+            ticks[loaded].fLow = (float)std::stod(fields[3]);
+            ticks[loaded].fClose = (float)std::stod(fields[4]);
+            ticks[loaded].fVol = (float)std::stod(fields[5]);
+            
+            // Log first and last bar times
+            if (histLog && (loaded == 0 || loaded == 299)) {
+                fprintf(histLog, "Bar[%d] time=%.8f, close=%.2f\n", 
+                    loaded, ticks[loaded].time, ticks[loaded].fClose);
+            }
+            
+            loaded++;
+        }
+        catch (...) {
+            continue;
+        }
+    }
+    
+    if (histLog) {
+        fprintf(histLog, "Skipped %d bars before tStart (%.8f)\n", skipped, tStart);
+        fprintf(histLog, "Successfully loaded: %d bars\n", loaded);
+        fprintf(histLog, "Returning: %d to Zorro\n", loaded);
+        fprintf(histLog, "==== BrokerHistory2 END ====\n\n");
+        fclose(histLog);
+    }
+    
+    return loaded;
 }
 
 //=============================================================================

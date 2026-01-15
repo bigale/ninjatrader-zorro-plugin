@@ -105,23 +105,49 @@ std::string TcpBridge::SendCommand(const std::string& command)
         return "ERROR:Send failed";
     }
     
-    // Receive response
-    char buffer[4096];
-    int received = recv(m_socket, buffer, sizeof(buffer) - 1, 0);
-    if (received == SOCKET_ERROR || received == 0) {
+    // Receive response - use LARGE buffer for historical data
+    // Historical data can be VERY large (10,000 bars = ~600KB)
+    const int BUFFER_SIZE = 1048576;  // 1MB buffer for large historical responses
+    std::string response;
+    char* buffer = new char[BUFFER_SIZE];  // Allocate on heap for large size
+    
+    try {
+        // Read all available data (may need multiple recv calls)
+        bool hasMoreData = true;
+        while (hasMoreData) {
+            int received = recv(m_socket, buffer, BUFFER_SIZE - 1, 0);
+            
+            if (received == SOCKET_ERROR || received == 0) {
+                m_connected = false;
+                delete[] buffer;
+                return "ERROR:Receive failed";
+            }
+            
+            buffer[received] = '\0';
+            response += std::string(buffer);
+            
+            // Check if we got a complete response (ends with newline)
+            if (received < (BUFFER_SIZE - 1) || response.back() == '\n') {
+                hasMoreData = false;
+            }
+        }
+        
+        delete[] buffer;
+        
+        m_lastResponse = response;
+        
+        // Remove trailing newline
+        if (!m_lastResponse.empty() && m_lastResponse.back() == '\n') {
+            m_lastResponse.pop_back();
+        }
+        
+        return m_lastResponse;
+    }
+    catch (...) {
+        delete[] buffer;
         m_connected = false;
-        return "ERROR:Receive failed";
+        return "ERROR:Exception in receive";
     }
-    
-    buffer[received] = '\0';
-    m_lastResponse = std::string(buffer);
-    
-    // Remove trailing newline
-    if (!m_lastResponse.empty() && m_lastResponse.back() == '\n') {
-        m_lastResponse.pop_back();
-    }
-    
-    return m_lastResponse;
 }
 
 std::vector<std::string> TcpBridge::SplitResponse(const std::string& response, char delimiter)
@@ -251,6 +277,19 @@ double TcpBridge::RealizedPnL(const char* account)
     }
     
     return std::stod(parts[3]);
+}
+
+double TcpBridge::UnrealizedPnL(const char* account)
+{
+    std::string response = SendCommand("GETACCOUNT");
+    
+    // Parse response: ACCOUNT:cashValue:buyingPower:realizedPnL:unrealizedPnL
+    auto parts = SplitResponse(response, ':');
+    if (parts.size() < 5 || parts[0] != "ACCOUNT") {
+        return 0.0;
+    }
+    
+    return std::stod(parts[4]);  // unrealized P&L
 }
 
 //=============================================================================

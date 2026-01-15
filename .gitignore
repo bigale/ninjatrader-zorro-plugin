@@ -40,3 +40,6 @@ private-docs/
 
 # Zorro installation (local development only)
 zorro/
+
+# Test projects (broken/incomplete)
+zorro-tests/
