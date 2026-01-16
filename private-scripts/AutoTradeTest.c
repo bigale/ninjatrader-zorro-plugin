@@ -11,7 +11,7 @@
 #define BARPERIOD 1
 #define VERBOSE 2
 #define LOG_TRADES
-#define ASSET "MES 0326"
+#define ASSET "BTCUSD"
 
 // Try to enable automated trading
 #pragma warning disable 

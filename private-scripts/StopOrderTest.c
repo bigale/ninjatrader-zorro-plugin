@@ -24,7 +24,7 @@ function run()
 	BarPeriod = BARPERIOD;
 	LookBack = 0;
 	
-	asset("MES 0326");
+	asset("MESH26");  // Use Name from Assets file, not Symbol
 	Lots = 1;
 	
 	if(is(INITRUN)) {
@@ -40,6 +40,9 @@ function run()
 		printf("\n  3. Stop-loss exit for LONG position");
 		printf("\n  4. Stop-loss exit for SHORT position");
 		printf("\n========================================\n");
+		
+		// Enable diagnostic logging
+		brokerCommand(SET_DIAGNOSTICS, 1);  // Info level
 		
 		g_TestPhase = 0;
 		g_WaitCounter = 0;
@@ -75,9 +78,16 @@ function run()
 			printf("\n[TEST 1] BUY STOP Order (enter long above market)");
 			printf("\n========================================");
 			
-			// Set stop 2 ticks above current price
-			g_StopPrice = roundto(priceClose() + 2*PIP, PIP);
+			// DEBUG: Print PIP value
+			printf("\n  [DEBUG] PIP variable value: %.4f", PIP);
+			printf("\n  [DEBUG] 2*PIP calculation: %.4f", 2*PIP);
+			printf("\n  [DEBUG] 2.*PIP calculation: %.4f", 2.*PIP);
+			printf("\n  [DEBUG] priceClose(): %.4f", priceClose());
 			
+			// Set stop 2 ticks above current price (use 2. not 2 for float)
+			g_StopPrice = roundto(priceClose() + 2.*PIP, PIP);
+			
+			printf("\n  [DEBUG] g_StopPrice after roundto: %.4f", g_StopPrice);
 			printf("\n  Current Price: %.2f", priceClose());
 			printf("\n  Stop Price: %.2f (%.2f above)", g_StopPrice, g_StopPrice - priceClose());
 			printf("\n  PIP size: %.2f", PIP);
@@ -177,8 +187,8 @@ function run()
 			printf("\n[TEST 2] SELL STOP Order (enter short below market)");
 			printf("\n========================================");
 			
-			// Set stop 2 ticks below current price
-			g_StopPrice = roundto(priceClose() - 2*PIP, PIP);
+			// Set stop 2 ticks below current price (use 2. not 2 for float)
+			g_StopPrice = roundto(priceClose() - 2.*PIP, PIP);
 			
 			printf("\n  Current Price: %.2f", priceClose());
 			printf("\n  Stop Price: %.2f (%.2f below)", g_StopPrice, priceClose() - g_StopPrice);

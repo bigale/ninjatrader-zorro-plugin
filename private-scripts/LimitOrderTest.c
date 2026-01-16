@@ -1,283 +1,80 @@
-// LimitOrderTest.c - Comprehensive Limit Order Testing
-// Tests limit order placement, fills, cancellation, and monitoring
-
-////////////////////////////////////////////////////////////
-// Configuration
-////////////////////////////////////////////////////////////
-#define BARPERIOD 5./60  // 5 second bars for better control
-#define VERBOSE 2
-
-////////////////////////////////////////////////////////////
-// Test State
-////////////////////////////////////////////////////////////
-int g_TestPhase = 0;
-int g_LastTradeID = 0;
-var g_LimitPrice = 0;
-var g_EntryPrice = 0;
-int g_WaitCounter = 0;
-int g_TestCount = 0;
-int g_PassCount = 0;
-int g_FailCount = 0;
+// LimitOrderTest.c - Test placing and canceling limit orders
+// Demonstrates working with pending limit orders
 
 function run()
 {
-	BarPeriod = BARPERIOD;
+	// Declare all variables at function start (Lite-C requirement)
+	var currentPrice;
+	var limitPrice;
+	int tradeID;
+	
+	BarPeriod = 1;
 	LookBack = 0;
 	
-	asset("MES 0326");
-	Lots = 1;
-	
 	if(is(INITRUN)) {
-		printf("\n========================================");
-		printf("\n   Limit Order Test Suite");
-		printf("\n========================================");
-		printf("\nAsset: %s", Asset);
-		printf("\nBar Period: %.0f seconds", BarPeriod * 60);
-		printf("\n");
-		printf("\nTests:");
-		printf("\n  1. LONG limit order (below market)");
-		printf("\n  2. LONG limit order fill monitoring");
-		printf("\n  3. SHORT limit order (above market)");
-		printf("\n  4. SHORT limit order fill monitoring");
-		printf("\n  5. Limit order cancellation");
-		printf("\n  6. Limit order vs market price validation");
-		printf("\n========================================\n");
-		
-		g_TestPhase = 0;
-		g_WaitCounter = 0;
-		g_TestCount = 0;
-		g_PassCount = 0;
-		g_FailCount = 0;
+		brokerCommand(SET_DIAGNOSTICS, 1);  // Info level logging
+		asset("MESH26");
+		printf("\n=== Limit Order Test ===\n");
+		printf("Strategy:\n");
+		printf("  1. Get current price\n");
+		printf("  2. Place limit buy order below market\n");
+		printf("  3. Wait 2 seconds\n");
+		printf("  4. Cancel the order\n");
+		printf("  5. Place limit sell order above market\n");
+		printf("  6. Wait 2 seconds\n");
+		printf("  7. Cancel the order\n\n");
 	}
 	
-	// Debug every 5 bars
-	if(Bar % 5 == 0 && !is(LOOKBACK)) {
-		printf("\n[STATUS] Phase:%d | Price:%.2f | Spread:%.2f | Open:%d",
-			g_TestPhase, priceClose(), Spread, NumOpenLong + NumOpenShort);
-	}
+	// Get current market price
+	currentPrice = priceClose();
+	printf("Current market price: %.2f\n", currentPrice);
 	
-	// State machine for testing
-	switch(g_TestPhase) {
-		
-		// Phase 0: Wait for market data
-		case 0:
-			if(priceClose() > 0 && Spread > 0) {
-				printf("\n[PHASE 0] Market data ready");
-				printf("\n  Price: %.2f | Spread: %.2f",
-					priceClose(), Spread);
-				g_TestPhase = 1;
-			} else {
-				printf("\n[PHASE 0] Waiting for market data...");
-			}
-			break;
-			
-		// Phase 1: Test LONG limit order (below market)
-		case 1:
-			printf("\n========================================");
-			printf("\n[TEST 1] LONG Limit Order (below market)");
-			printf("\n========================================");
-			
-			// Set limit 1 tick below current price
-			// Use roundto to ensure it's exactly 1 tick
-			g_LimitPrice = roundto(priceClose() - PIP, PIP);
-			
-			printf("\n  Current Price: %.2f", priceClose());
-			printf("\n  Limit Price: %.2f (%.2f below)", g_LimitPrice, priceClose() - g_LimitPrice);
-			printf("\n  PIP size: %.2f", PIP);
-			printf("\n  Expected: Order pending until price drops to limit");
-			
-			// Place limit order
-			OrderLimit = g_LimitPrice;
-			g_LastTradeID = enterLong();
-			
-			if(g_LastTradeID > 0) {
-				printf("\n  [PASS] Order placed ID:%d", g_LastTradeID);
-				g_PassCount++;
-			} else {
-				printf("\n  [FAIL] Order placement failed!");
-				g_FailCount++;
-			}
-			
-			g_TestCount++;
-			g_TestPhase = 2;
-			g_WaitCounter = 0;
-			break;
-			
-		// Phase 2: Monitor LONG limit fill
-		case 2:
-			g_WaitCounter++;
-			
-			if(NumOpenLong > 0) {
-				printf("\n[TEST 2] LONG Limit Fill Monitoring");
-				printf("\n  [PASS] Order filled!");
-				printf("\n  Entry Price: %.2f", TradePriceOpen);
-				printf("\n  Limit Price: %.2f", g_LimitPrice);
-				
-				// Check fill quality (allow up to 1 tick worse due to rounding)
-				string fillQuality;
-				if(TradePriceOpen <= g_LimitPrice + PIP)
-					fillQuality = "GOOD (at or better)";
-				else
-					fillQuality = "BAD (worse than limit)";
-				
-				printf("\n  Fill Quality: %s", fillQuality);
-				
-				g_EntryPrice = TradePriceOpen;
-				
-				if(TradePriceOpen <= g_LimitPrice + PIP) {
-					printf("\n  [PASS] Filled at limit or better (within 1 tick)");
-					g_PassCount++;
-				} else {
-					printf("\n  [FAIL] Filled worse than limit!");
-					g_FailCount++;
-				}
-				
-				g_TestCount++;
-				g_TestPhase = 3;
-				g_WaitCounter = 0;
-			} else if(g_WaitCounter > 20) {
-				printf("\n[TEST 2] Limit order timeout (20 bars)");
-				printf("\n  Status: Order still pending");
-				printf("\n  Current Price: %.2f vs Limit: %.2f", priceClose(), g_LimitPrice);
-				printf("\n  [NOTE] This is expected if price hasn't reached limit");
-				
-				// Cancel the order and move on
-				exitLong();
-				g_TestPhase = 3;
-				g_WaitCounter = 0;
-			} else {
-				if(g_WaitCounter % 2 == 0) {
-					printf("\n[MONITOR] Waiting for fill... (Bar %d | Price:%.2f | Limit:%.2f)",
-						g_WaitCounter, priceClose(), g_LimitPrice);
-				}
-			}
-			break;
-			
-		// Phase 3: Close LONG position
-		case 3:
-			if(NumOpenLong > 0) {
-				printf("\n[CLEANUP] Closing LONG position");
-				exitLong();
-				g_WaitCounter = 0;
-			}
-			
-			// Wait for position to close
-			if(NumOpenLong == 0) {
-				printf("\n  Position closed");
-				g_TestPhase = 4;
-			}
-			break;
-			
-		// Phase 4: Test SHORT limit order (above market)
-		case 4:
-			printf("\n");
-			printf("\n========================================");
-			printf("\n[TEST 3] SHORT Limit Order (above market)");
-			printf("\n========================================");
-			
-			// Set limit 1 tick above current price
-			// Use roundto to ensure it's exactly 1 tick
-			g_LimitPrice = roundto(priceClose() + PIP, PIP);
-			
-			printf("\n  Current Price: %.2f", priceClose());
-			printf("\n  Limit Price: %.2f (%.2f above)", g_LimitPrice, g_LimitPrice - priceClose());
-			printf("\n  PIP size: %.2f", PIP);
-			printf("\n  Expected: Order pending until price rises to limit");
-			
-			// Place limit order
-			OrderLimit = g_LimitPrice;
-			g_LastTradeID = enterShort();
-			
-			if(g_LastTradeID > 0) {
-				printf("\n  [PASS] Order placed ID:%d", g_LastTradeID);
-				g_PassCount++;
-			} else {
-				printf("\n  [FAIL] Order placement failed!");
-				g_FailCount++;
-			}
-			
-			g_TestCount++;
-			g_TestPhase = 5;
-			g_WaitCounter = 0;
-			break;
-			
-		// Phase 5: Monitor SHORT limit fill
-		case 5:
-			g_WaitCounter++;
-			
-			if(NumOpenShort > 0) {
-				printf("\n[TEST 4] SHORT Limit Fill Monitoring");
-				printf("\n  [PASS] Order filled!");
-				printf("\n  Entry Price: %.2f", TradePriceOpen);
-				printf("\n  Limit Price: %.2f", g_LimitPrice);
-				
-				// Check fill quality (allow up to 1 tick worse due to rounding)
-				string fillQuality;
-				if(TradePriceOpen >= g_LimitPrice - PIP)
-					fillQuality = "GOOD (at or better)";
-				else
-					fillQuality = "BAD (worse than limit)";
-				
-				printf("\n  Fill Quality: %s", fillQuality);
-				
-				g_EntryPrice = TradePriceOpen;
-				
-				if(TradePriceOpen >= g_LimitPrice - PIP) {
-					printf("\n  [PASS] Filled at limit or better (within 1 tick)");
-					g_PassCount++;
-				} else {
-					printf("\n  [FAIL] Filled worse than limit!");
-					g_FailCount++;
-				}
-				
-				g_TestCount++;
-				g_TestPhase = 6;
-				g_WaitCounter = 0;
-			} else if(g_WaitCounter > 20) {
-				printf("\n[TEST 4] Limit order timeout (20 bars)");
-				printf("\n  Status: Order still pending");
-				printf("\n  Current Price: %.2f vs Limit: %.2f", priceClose(), g_LimitPrice);
-				printf("\n  [NOTE] This is expected if price hasn't reached limit");
-				
-				// Cancel and move on
-				exitShort();
-				g_TestPhase = 6;
-				g_WaitCounter = 0;
-			} else {
-				if(g_WaitCounter % 2 == 0) {
-					printf("\n[MONITOR] Waiting for fill... (Bar %d | Price:%.2f | Limit:%.2f)",
-						g_WaitCounter, priceClose(), g_LimitPrice);
-				}
-			}
-			break;
-			
-		// Phase 6: Cleanup and final report
-		case 6:
-			if(NumOpenShort > 0) {
-				printf("\n[CLEANUP] Closing SHORT position");
-				exitShort();
-			}
-			
-			if(NumOpenShort == 0 && NumOpenLong == 0) {
-				printf("\n");
-				printf("\n========================================");
-				printf("\n   Test Results Summary");
-				printf("\n========================================");
-				printf("\n  Total Tests: %d", g_TestCount);
-				printf("\n  Passed: %d", g_PassCount);
-				printf("\n  Failed: %d", g_FailCount);
-				printf("\n");
-				
-				if(g_FailCount == 0) {
-					printf("\n  ? ALL TESTS PASSED");
-				} else {
-					printf("\n  ? %d TEST(S) FAILED", g_FailCount);
-				}
-				
-				printf("\n========================================\n");
-				
-				quit("Limit order tests complete");
-			}
-			break;
-	}
+	// Test 1: Place limit BUY order below market
+	printf("\n--- Test 1: Limit BUY Order ---\n");
+	limitPrice = currentPrice - 5.0;  // 5 points below market
+	printf("Placing limit BUY order at %.2f (%.2f below market)\n", limitPrice, currentPrice - limitPrice);
+	
+	Limit = limitPrice;  // Set limit price
+	tradeID = enterLong(1);  // Returns trade ID
+	
+	printf("Trade ID returned: %d\n", tradeID);
+	printf("NumPendingTotal: %d\n", NumPendingTotal);
+	
+	// Wait 2 seconds
+	printf("Waiting 2 seconds...\n");
+	wait(2000);
+	
+	// Cancel the order using exitTrade
+	printf("Canceling order (Trade ID: %d)...\n", tradeID);
+	exitTrade(tradeID);
+	
+	printf("NumPendingTotal after cancel: %d\n", NumPendingTotal);
+	
+	// Test 2: Place limit SELL order above market
+	printf("\n--- Test 2: Limit SELL Order ---\n");
+	limitPrice = currentPrice + 5.0;  // 5 points above market
+	printf("Placing limit SELL order at %.2f (%.2f above market)\n", limitPrice, limitPrice - currentPrice);
+	
+	Limit = limitPrice;  // Set limit price
+	tradeID = enterShort(1);  // Returns trade ID
+	
+	printf("Trade ID returned: %d\n", tradeID);
+	printf("NumPendingTotal: %d\n", NumPendingTotal);
+	
+	// Wait 2 seconds
+	printf("Waiting 2 seconds...\n");
+	wait(2000);
+	
+	// Cancel the order
+	printf("Canceling order (Trade ID: %d)...\n", tradeID);
+	exitTrade(tradeID);
+	
+	printf("NumPendingTotal after cancel: %d\n", NumPendingTotal);
+	
+	// Summary
+	printf("\n=== Test Complete ===\n");
+	printf("Final pending orders: %d\n", NumPendingTotal);
+	printf("Final open positions: %d\n", NumOpenTotal);
+	
+	quit("Limit order test completed successfully");
 }

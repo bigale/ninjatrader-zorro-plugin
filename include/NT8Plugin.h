@@ -10,6 +10,7 @@
 #include <windows.h>
 #include <string>
 #include <map>
+#include <memory>
 
 #include "trading.h"
 #include "TcpBridge.h"  // Changed from NtDirect.h
@@ -20,8 +21,26 @@
 // Plugin info
 #define PLUGIN_NAME    "NT8"
 
-// Global state
-extern TcpBridge* g_bridge;  // Changed from NtDirect
+// Version tracking (undef trading.h version first)
+#ifdef PLUGIN_VERSION
+#undef PLUGIN_VERSION
+#endif
+
+#define PLUGIN_VERSION_MAJOR 1
+#define PLUGIN_VERSION_MINOR 0
+#define PLUGIN_VERSION_PATCH 0
+#define PLUGIN_VERSION ((PLUGIN_VERSION_MAJOR << 16) | (PLUGIN_VERSION_MINOR << 8) | PLUGIN_VERSION_PATCH)
+
+// Version string helper
+#define STRINGIFY(x) #x
+#define TOSTRING(x) STRINGIFY(x)
+#define PLUGIN_VERSION_STRING \
+    TOSTRING(PLUGIN_VERSION_MAJOR) "." \
+    TOSTRING(PLUGIN_VERSION_MINOR) "." \
+    TOSTRING(PLUGIN_VERSION_PATCH)
+
+// Global state (std::unique_ptr forward declaration)
+extern std::unique_ptr<TcpBridge> g_bridge;
 extern int (__cdecl *BrokerMessage)(const char* text);
 extern int (__cdecl *BrokerProgress)(const int progress);
 
@@ -48,6 +67,64 @@ struct OrderInfo {
 };
 
 //=============================================================================
+// Asset specification structure
+//=============================================================================
+
+struct AssetSpec {
+    double tickSize;      // Minimum price increment (pip size)
+    double pointValue;    // Dollar value per point (pip cost)
+    
+    AssetSpec() : tickSize(0), pointValue(0) {}
+};
+
+//=============================================================================
+// Plugin State - consolidates all global configuration and state
+//=============================================================================
+
+struct PluginState {
+    // Configuration
+    int diagLevel = 0;              // Diagnostic level (0=errors, 1=info, 2=debug)
+    int orderType = ORDER_GTC;      // Default order time-in-force
+    
+    // Connection state
+    bool connected = false;         // Connected to NinjaTrader
+    
+    // Account state
+    std::string account;            // Current account name
+    std::string currentSymbol;      // Last subscribed symbol
+    
+    // Position cache - CRITICAL: Updated immediately on fills
+    std::map<std::string, int> positions;  // symbol -> signed position (negative for short)
+    
+    // Asset specifications cache
+    std::map<std::string, AssetSpec> assetSpecs;  // symbol -> contract specs
+    
+    // Order tracking
+    std::map<int, OrderInfo> orders;            // Track orders by numeric ID
+    std::map<std::string, int> orderIdMap;      // Map NT order ID to numeric ID
+    int nextOrderNum = 1000;                    // Next numeric order ID to assign
+    
+    // Order cleanup settings
+    int maxOrderHistory = 100;                  // Keep last N completed orders for debugging
+    int orderCleanupCount = 0;                  // Track cleanup operations
+    
+    // Reset all state (called on logout)
+    void reset() {
+        diagLevel = 0;
+        orderType = ORDER_GTC;
+        connected = false;
+        account.clear();
+        currentSymbol.clear();
+        positions.clear();  // Clear position cache
+        assetSpecs.clear(); // Clear asset specs
+        orders.clear();
+        orderIdMap.clear();
+        nextOrderNum = 1000;
+        orderCleanupCount = 0;
+    }
+};
+
+//=============================================================================
 // Zorro Broker Plugin Functions
 //=============================================================================
 
@@ -68,6 +145,8 @@ DLLFUNC int BrokerTrade(int nTradeID, double* pOpen, double* pClose,
     double* pCost, double* pProfit);
 DLLFUNC int BrokerSell2(int nTradeID, int nAmount, double Limit,
     double* pClose, double* pCost, double* pProfit, int* pFill);
+DLLFUNC int BrokerHistory2(char* Asset, DATE tStart, DATE tEnd,
+    int nTickMinutes, int nTicks, T6* ticks);
 DLLFUNC double BrokerCommand(int Command, DWORD dwParameter);
 
 #endif // NT8PLUGIN_H

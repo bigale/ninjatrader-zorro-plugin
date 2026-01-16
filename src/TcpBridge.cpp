@@ -105,23 +105,49 @@ std::string TcpBridge::SendCommand(const std::string& command)
         return "ERROR:Send failed";
     }
     
-    // Receive response
-    char buffer[4096];
-    int received = recv(m_socket, buffer, sizeof(buffer) - 1, 0);
-    if (received == SOCKET_ERROR || received == 0) {
+    // Receive response - use LARGE buffer for historical data
+    // Historical data can be VERY large (10,000 bars = ~600KB)
+    const int BUFFER_SIZE = 1048576;  // 1MB buffer for large historical responses
+    std::string response;
+    char* buffer = new char[BUFFER_SIZE];  // Allocate on heap for large size
+    
+    try {
+        // Read all available data (may need multiple recv calls)
+        bool hasMoreData = true;
+        while (hasMoreData) {
+            int received = recv(m_socket, buffer, BUFFER_SIZE - 1, 0);
+            
+            if (received == SOCKET_ERROR || received == 0) {
+                m_connected = false;
+                delete[] buffer;
+                return "ERROR:Receive failed";
+            }
+            
+            buffer[received] = '\0';
+            response += std::string(buffer);
+            
+            // Check if we got a complete response (ends with newline)
+            if (received < (BUFFER_SIZE - 1) || response.back() == '\n') {
+                hasMoreData = false;
+            }
+        }
+        
+        delete[] buffer;
+        
+        m_lastResponse = response;
+        
+        // Remove trailing newline
+        if (!m_lastResponse.empty() && m_lastResponse.back() == '\n') {
+            m_lastResponse.pop_back();
+        }
+        
+        return m_lastResponse;
+    }
+    catch (...) {
+        delete[] buffer;
         m_connected = false;
-        return "ERROR:Receive failed";
+        return "ERROR:Exception in receive";
     }
-    
-    buffer[received] = '\0';
-    m_lastResponse = std::string(buffer);
-    
-    // Remove trailing newline
-    if (!m_lastResponse.empty() && m_lastResponse.back() == '\n') {
-        m_lastResponse.pop_back();
-    }
-    
-    return m_lastResponse;
 }
 
 std::vector<std::string> TcpBridge::SplitResponse(const std::string& response, char delimiter)
@@ -253,6 +279,19 @@ double TcpBridge::RealizedPnL(const char* account)
     return std::stod(parts[3]);
 }
 
+double TcpBridge::UnrealizedPnL(const char* account)
+{
+    std::string response = SendCommand("GETACCOUNT");
+    
+    // Parse response: ACCOUNT:cashValue:buyingPower:realizedPnL:unrealizedPnL
+    auto parts = SplitResponse(response, ':');
+    if (parts.size() < 5 || parts[0] != "ACCOUNT") {
+        return 0.0;
+    }
+    
+    return std::stod(parts[4]);  // unrealized P&L
+}
+
 //=============================================================================
 // Position
 //=============================================================================
@@ -264,13 +303,42 @@ int TcpBridge::MarketPosition(const char* instrument, const char* account)
     std::string cmd = std::string("GETPOSITION:") + instrument;
     std::string response = SendCommand(cmd);
     
+    // Log to file for debugging
+    FILE* log = fopen("C:\\Zorro_2.66\\TcpBridge_debug.log", "a");
+    if (log) {
+        fprintf(log, "[MarketPosition] query: %s\n", cmd.c_str());
+        fprintf(log, "[MarketPosition] response: '%s'\n", response.c_str());
+        fflush(log);
+    }
+    
     // Parse response: POSITION:quantity:avgPrice
     auto parts = SplitResponse(response, ':');
+    
+    if (log) {
+        fprintf(log, "[MarketPosition] Parsed %zu parts:", parts.size());
+        for (size_t i = 0; i < parts.size(); i++) {
+            fprintf(log, " [%zu]='%s'", i, parts[i].c_str());
+        }
+        fprintf(log, "\n");
+    }
+    
     if (parts.size() < 3 || parts[0] != "POSITION") {
+        if (log) {
+            fprintf(log, "[MarketPosition] Parse FAILED: size=%zu, parts[0]='%s'\n", 
+                parts.size(), parts.size() > 0 ? parts[0].c_str() : "NONE");
+            fclose(log);
+        }
         return 0;
     }
     
-    return std::stoi(parts[1]);
+    int position = std::stoi(parts[1]);
+    
+    if (log) {
+        fprintf(log, "[MarketPosition] Returning position: %d\n", position);
+        fclose(log);
+    }
+    
+    return position;
 }
 
 double TcpBridge::AvgEntryPrice(const char* instrument, const char* account)
@@ -312,21 +380,24 @@ int TcpBridge::Command(const char* command, const char* account, const char* ins
         cmd << "PLACEORDER:" << action << ":" << instrument << ":" << quantity 
             << ":" << orderType << ":" << limitPrice << ":" << stopPrice;
         
-        // Debug logging
-        printf("[TcpBridge] Sending order command: %s\n", cmd.str().c_str());
-        printf("[TcpBridge] Details:\n");
-        printf("  Action: %s\n", action);
-        printf("  Instrument: %s\n", instrument);
-        printf("  Quantity: %d\n", quantity);
-        printf("  OrderType: %s\n", orderType);
-        printf("  LimitPrice: %.2f\n", limitPrice);
-        printf("  StopPrice: %.2f\n", stopPrice);
-        
         std::string response = SendCommand(cmd.str());
         
-        printf("[TcpBridge] Response: %s\n", response.c_str());
+        // Extract NT order ID from response: "ORDER:fa41b14fff514c69b5749bba57471eb8"
+        auto parts = SplitResponse(response, ':');
+        if (parts.size() >= 2 && parts[0] == "ORDER") {
+            m_lastNtOrderId = parts[1];  // Store the NT GUID
+            
+            FILE* log = fopen("C:\\Zorro_2.66\\TcpBridge_debug.log", "a");
+            if (log) {
+                fprintf(log, "[Command] PLACEORDER response: %s\n", response.c_str());
+                fprintf(log, "[Command] Extracted NT order ID: %s\n", m_lastNtOrderId.c_str());
+                fclose(log);
+            }
+            
+            return 0;  // Success
+        }
         
-        return (response.find("ORDER:") != std::string::npos) ? 0 : -1;
+        return -1;  // Failed
     }
     else if (strcmp(command, "CANCEL") == 0) {
         cmd << "CANCELORDER:" << orderId;
@@ -339,21 +410,53 @@ int TcpBridge::Command(const char* command, const char* account, const char* ins
 
 int TcpBridge::Filled(const char* orderId)
 {
-    // This would need order tracking in the AddOn
-    // For now, return 0 (not implemented)
-    return 0;
+    if (!orderId) return 0;
+    
+    std::string cmd = std::string("GETORDERSTATUS:") + orderId;
+    std::string response = SendCommand(cmd);
+    
+    // Parse response: ORDERSTATUS:orderId:state:filled:avgFillPrice
+    auto parts = SplitResponse(response, ':');
+    if (parts.size() < 4 || parts[0] != "ORDERSTATUS") {
+        return 0;
+    }
+    
+    return std::stoi(parts[3]);  // filled quantity
 }
 
 double TcpBridge::AvgFillPrice(const char* orderId)
 {
-    // This would need order tracking in the AddOn
-    return 0.0;
+    if (!orderId) return 0.0;
+    
+    std::string cmd = std::string("GETORDERSTATUS:") + orderId;
+    std::string response = SendCommand(cmd);
+    
+    // Parse response: ORDERSTATUS:orderId:state:filled:avgFillPrice
+    auto parts = SplitResponse(response, ':');
+    if (parts.size() < 5 || parts[0] != "ORDERSTATUS") {
+        return 0.0;
+    }
+    
+    return std::stod(parts[4]);  // avg fill price
 }
 
 const char* TcpBridge::OrderStatus(const char* orderId)
 {
-    // This would need order tracking in the AddOn
-    return "Unknown";
+    if (!orderId) return "Unknown";
+    
+    std::string cmd = std::string("GETORDERSTATUS:") + orderId;
+    std::string response = SendCommand(cmd);
+    
+    // Parse response: ORDERSTATUS:orderId:state:filled:avgFillPrice
+    auto parts = SplitResponse(response, ':');
+    if (parts.size() < 3 || parts[0] != "ORDERSTATUS") {
+        return "Unknown";
+    }
+    
+    // Store in static buffer (not thread-safe but OK for single-threaded Zorro)
+    static char statusBuffer[64];
+    strncpy_s(statusBuffer, sizeof(statusBuffer), parts[2].c_str(), _TRUNCATE);
+    return statusBuffer;
 }
 
 int TcpBridge::ConfirmOrders(int confirm)

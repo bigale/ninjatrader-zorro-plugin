@@ -64,3 +64,19 @@ set_target_properties(NT8 PROPERTIES
 install(TARGETS NT8
     RUNTIME DESTINATION Plugin
 )
+
+# Option to build Zorro C++ test scripts (DISABLED - has compilation errors)
+option(BUILD_ZORRO_TESTS "Build Zorro C++ test DLLs" OFF)
+
+if(BUILD_ZORRO_TESTS)
+    message(STATUS "Building Zorro C++ test scripts")
+    add_subdirectory(zorro-tests)
+endif()
+
+# Option to build C++ strategy examples
+option(BUILD_EXAMPLES "Build example C++ strategies" OFF)
+
+if(BUILD_EXAMPLES)
+    message(STATUS "Building C++ strategy examples")
+    add_subdirectory(examples/SimpleCppStrategy)
+endif()

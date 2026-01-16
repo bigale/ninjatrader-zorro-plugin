@@ -5,11 +5,11 @@
 ### Key File Locations
 ```
 Plugin DLL:     C:\Zorro\Plugin\NT8.dll
-AddOn Source:   C:\Users\bigal\Documents\NinjaTrader 8\bin\Custom\AddOns\ZorroBridge.cs
-Assets File:    C:\Users\bigal\source\repos\ninjatrader-zorro-plugin\zorro\Log\Assets.csv
-AssetsRithmic:  C:\Users\bigal\source\repos\ninjatrader-zorro-plugin\zorro\Log\AssetsRithmic.csv
-Accounts File:  C:\Users\bigal\source\repos\ninjatrader-zorro-plugin\zorro\History\Accounts.csv
-Test Log:       C:\Users\bigal\source\repos\ninjatrader-zorro-plugin\zorro\Log\AutoTradeTest_demo.log
+AddOn Source:   C:\Users\zorro\Documents\NinjaTrader 8\bin\Custom\AddOns\ZorroBridge.cs
+Assets File:    C:\Users\zorro\source\repos\ninjatrader-zorro-plugin\zorro\Log\Assets.csv
+AssetsRithmic:  C:\Users\zorro\source\repos\ninjatrader-zorro-plugin\zorro\Log\AssetsRithmic.csv
+Accounts File:  C:\Users\zorro\source\repos\ninjatrader-zorro-plugin\zorro\History\Accounts.csv
+Test Log:       C:\Users\zorro\source\repos\ninjatrader-zorro-plugin\zorro\Log\AutoTradeTest_demo.log
 ```
 
 ### Build & Deploy Workflow
@@ -24,7 +24,7 @@ Copy-Item "Release\NT8.dll" "C:\Zorro\Plugin\NT8.dll" -Force
 
 **Update AddOn:**
 ```bash
-Copy-Item "ninjatrader-addon\ZorroBridge.cs" "C:\Users\bigal\Documents\NinjaTrader 8\bin\Custom\AddOns\" -Force
+Copy-Item "ninjatrader-addon\ZorroBridge.cs" "C:\Users\zorro\Documents\NinjaTrader 8\bin\Custom\AddOns\" -Force
 # Then press F5 in NinjaTrader to recompile
 ```
 
@@ -73,12 +73,12 @@ Copy-Item "ninjatrader-addon\ZorroBridge.cs" "C:\Users\bigal\Documents\NinjaTrad
 
 **AutoTradeTest log file:**
 ```
-C:\Users\bigal\source\repos\ninjatrader-zorro-plugin\zorro\Log\AutoTradeTest_demo.log
+C:\Users\zorro\source\repos\ninjatrader-zorro-plugin\zorro\Log\AutoTradeTest_demo.log
 ```
 
 **View recent log entries:**
 ```powershell
-Get-Content "C:\Users\bigal\source\repos\ninjatrader-zorro-plugin\zorro\Log\AutoTradeTest_demo.log" -Tail 50
+Get-Content "C:\Users\zorro\source\repos\ninjatrader-zorro-plugin\zorro\Log\AutoTradeTest_demo.log" -Tail 50
 ```
 
 ### Configuration Files
@@ -92,14 +92,6 @@ MESH26,6869.00,0.250000,0.0,0.0,0.25,1.25,500,CME,5,0.52,MES 03-26
 - PIP: `0.25` (tick size)
 - PIPCost: `1.25` (tick value)
 
-**Accounts.csv** - Plugin reference (CRITICAL FORMAT):
-```csv
-NT8-Sim,NT8,0,Sim101,,AssetsRithmic.csv,USD,0,1,NT8
-```
-- Plugin: `NT8` (NO .dll extension!)
-- Assets: `AssetsRithmic.csv` (WITH .csv extension!)
-
-**?? CRITICAL:** The plugin column must NOT have `.dll` extension for Zorro 2.70!
 
 ## Markdown File Creation Rules
 
@@ -189,7 +181,6 @@ style NodeName fill:#HEXCOLOR,stroke:#333,stroke-width:2px,color:#000
 - **TCP Bridge**: Plugin communicates via localhost:8888
 - **No ATI/NtDirect.dll**: Modern NT8 8.1+ compatible only
 - **32-bit Plugin**: Required for Zorro compatibility
-- **Live-only trading**: No historical data support
 
 ### Key Components
 1. **NT8.dll** - C++ broker plugin (32-bit)
@@ -200,7 +191,6 @@ style NodeName fill:#HEXCOLOR,stroke:#333,stroke-width:2px,color:#000
 - Use "ZorroBridge" (not "ZorroATI")
 - Use "AddOn" (not "plugin" for C# component)
 - Use "plugin" for NT8.dll specifically
-- Clarify "live trading" vs "playback/simulation"
 
 ## Testing Workflow
 

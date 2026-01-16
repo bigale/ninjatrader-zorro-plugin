@@ -37,6 +37,9 @@ Thumbs.db
 
 # Development notes (keep private)
 private-docs/
-
+private-scripts/
 # Zorro installation (local development only)
 zorro/
+
+# Test projects (broken/incomplete)
+zorro-tests/

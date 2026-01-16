@@ -58,6 +58,8 @@ typedef struct T6
 #define GET_NTRADES        356
 #define GET_TRADES         357
 #define GET_AVGENTRY       358
+#define GET_DIAGNOSTICS    359  // Query current diagnostic level
+#define GET_INSTRUMENTS    360  // Get list of available instruments (custom)
 
 #define SET_PATCH          393
 #define SET_DELAY          394
