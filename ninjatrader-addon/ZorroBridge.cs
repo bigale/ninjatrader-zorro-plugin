@@ -44,6 +44,10 @@ namespace NinjaTrader.NinjaScript.AddOns
         private ConcurrentDictionary<string, Instrument> subscribedInstruments = new ConcurrentDictionary<string, Instrument>();
         private ConcurrentDictionary<string, Order> activeOrders = new ConcurrentDictionary<string, Order>();
         
+        // Order cleanup settings
+        private const int MAX_ORDER_HISTORY = 100;  // Keep last N completed orders
+        private int orderCleanupCount = 0;
+        
         // Logging configuration
         private LogLevel currentLogLevel = LogLevel.INFO;  // Default to INFO
         private DateTime lastHeartbeat = DateTime.MinValue;
@@ -97,6 +101,70 @@ namespace NinjaTrader.NinjaScript.AddOns
                 Log(LogLevel.INFO, $"Status OK | Prices:{priceRequestCount} Orders:{orderCount} Instruments:{subscribedInstruments.Count}");
                 lastHeartbeat = DateTime.Now;
                 priceRequestCount = 0;
+            }
+        }
+        
+        // **NEW: Handle order updates for automatic cleanup**
+        private void OnOrderUpdate(object sender, OrderEventArgs e)
+        {
+            try
+            {
+                // Log state changes at DEBUG level
+                Log(LogLevel.DEBUG, $"Order {e.Order.OrderId} state: {e.OrderState}");
+                
+                // When order reaches terminal state, schedule cleanup
+                if (e.OrderState == OrderState.Filled || 
+                    e.OrderState == OrderState.Cancelled || 
+                    e.OrderState == OrderState.Rejected)
+                {
+                    Log(LogLevel.TRACE, $"Order {e.Order.OrderId} reached terminal state: {e.OrderState}");
+                    
+                    // Delay removal to allow final status queries
+                    Task.Delay(TimeSpan.FromMinutes(5)).ContinueWith(_ => {
+                        CleanupOldOrders();
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                Log(LogLevel.ERROR, $"Error in OnOrderUpdate: {ex.Message}");
+            }
+        }
+        
+        // **NEW: Clean up old completed orders**
+        private void CleanupOldOrders()
+        {
+            try
+            {
+                // Find all orders in terminal states
+                var completedOrders = activeOrders.Values
+                    .Where(o => o.OrderState == OrderState.Filled || 
+                                o.OrderState == OrderState.Cancelled || 
+                                o.OrderState == OrderState.Rejected)
+                    .OrderBy(o => o.Time)  // Oldest first
+                    .ToList();
+                
+                // Remove oldest if we exceed max history
+                int toRemove = completedOrders.Count - MAX_ORDER_HISTORY;
+                if (toRemove > 0)
+                {
+                    for (int i = 0; i < toRemove; i++)
+                    {
+                        Order orderToRemove;
+                        if (activeOrders.TryRemove(completedOrders[i].OrderId, out orderToRemove))
+                        {
+                            // Unsubscribe from events
+                            orderToRemove.OrderUpdate -= OnOrderUpdate;
+                            orderCleanupCount++;
+                        }
+                    }
+                    
+                    Log(LogLevel.INFO, $"Cleaned up {toRemove} old orders (total cleaned: {orderCleanupCount})");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log(LogLevel.ERROR, $"Error in CleanupOldOrders: {ex.Message}");
             }
         }
 
@@ -608,6 +676,9 @@ namespace NinjaTrader.NinjaScript.AddOns
 
                 Log(LogLevel.TRACE, $"Created order: {order.OrderId}");                
                 currentAccount.Submit(new[] { order });
+                
+                // **NEW: Subscribe to order updates for automatic cleanup**
+                order.OrderUpdate += OnOrderUpdate;
                 
                 Log(LogLevel.INFO, $"ORDER PLACED: {action} {quantity} {instrumentName} @ {orderType} (ID:{order.OrderId})");
                 

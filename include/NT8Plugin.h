@@ -104,6 +104,10 @@ struct PluginState {
     std::map<std::string, int> orderIdMap;      // Map NT order ID to numeric ID
     int nextOrderNum = 1000;                    // Next numeric order ID to assign
     
+    // Order cleanup settings
+    int maxOrderHistory = 100;                  // Keep last N completed orders for debugging
+    int orderCleanupCount = 0;                  // Track cleanup operations
+    
     // Reset all state (called on logout)
     void reset() {
         diagLevel = 0;
@@ -116,6 +120,7 @@ struct PluginState {
         orders.clear();
         orderIdMap.clear();
         nextOrderNum = 1000;
+        orderCleanupCount = 0;
     }
 };
 

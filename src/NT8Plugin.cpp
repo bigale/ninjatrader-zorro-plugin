@@ -11,6 +11,7 @@
 #include <ctime>
 #include <map>
 #include <vector>
+#include <algorithm>  // For std::sort
 #include <sstream>
 #include <iomanip>
 
@@ -183,6 +184,47 @@ static OrderInfo* GetOrder(int numId)
         return &it->second;
     }
     return nullptr;
+}
+
+// Clean up old completed orders to prevent memory leaks
+// Keeps last maxOrderHistory orders for debugging
+static void CleanupOldOrders()
+{
+    // Count orders in terminal states (Filled, Cancelled, Rejected)
+    std::vector<int> completedOrders;
+    
+    for (const auto& pair : g_state.orders) {
+        const OrderInfo& order = pair.second;
+        if (order.status == "Filled" || 
+            order.status == "Cancelled" || 
+            order.status == "Rejected") {
+            completedOrders.push_back(pair.first);
+        }
+    }
+    
+    // If we have more than maxOrderHistory completed orders, remove oldest
+    if (completedOrders.size() > (size_t)g_state.maxOrderHistory) {
+        // Sort by order ID (older orders have lower IDs)
+        std::sort(completedOrders.begin(), completedOrders.end());
+        
+        // Calculate how many to remove
+        size_t toRemove = completedOrders.size() - g_state.maxOrderHistory;
+        
+        for (size_t i = 0; i < toRemove; i++) {
+            int orderId = completedOrders[i];
+            OrderInfo* order = GetOrder(orderId);
+            
+            if (order) {
+                // Remove from both maps
+                g_state.orderIdMap.erase(order->orderId);
+                g_state.orders.erase(orderId);
+                g_state.orderCleanupCount++;
+            }
+        }
+        
+        LogInfo("# Cleaned up %zu old orders (total cleaned: %d)", 
+            toRemove, g_state.orderCleanupCount);
+    }
 }
 
 //=============================================================================
@@ -678,6 +720,8 @@ DLLFUNC int BrokerTrade(int nTradeID, double* pOpen, double* pClose,
     
     // Check for cancelled/rejected
     if (order->status == "Cancelled" || order->status == "Rejected") {
+        // Trigger cleanup when orders reach terminal states
+        CleanupOldOrders();
         return NAY;
     }
     
@@ -688,6 +732,12 @@ DLLFUNC int BrokerTrade(int nTradeID, double* pOpen, double* pClose,
     order->filled = filled;
     if (avgFill > 0) {
         order->avgFillPrice = avgFill;
+    }
+    
+    // If order is fully filled, mark as complete and trigger cleanup
+    if (filled > 0 && filled >= order->quantity) {
+        order->status = "Filled";
+        CleanupOldOrders();
     }
     
     // Return entry price
