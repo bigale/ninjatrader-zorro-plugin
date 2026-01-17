@@ -13,6 +13,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;  // **FIXED: Add Task for Task.Delay**
 using NinjaTrader.Cbi;
 using NinjaTrader.NinjaScript;
 using NinjaTrader.Data;  // For BarsRequest
@@ -104,20 +105,20 @@ namespace NinjaTrader.NinjaScript.AddOns
             }
         }
         
-        // **NEW: Handle order updates for automatic cleanup**
-        private void OnOrderUpdate(object sender, OrderEventArgs e)
+        // **NEW: Handle order execution updates for automatic cleanup**
+        private void OnOrderExecution(object sender, ExecutionEventArgs e)
         {
             try
             {
-                // Log state changes at DEBUG level
-                Log(LogLevel.DEBUG, $"Order {e.Order.OrderId} state: {e.OrderState}");
+                // Log execution at DEBUG level
+                Log(LogLevel.DEBUG, $"Order {e.Order.OrderId} executed: {e.Execution.Quantity}@{e.Execution.Price}");
                 
                 // When order reaches terminal state, schedule cleanup
-                if (e.OrderState == OrderState.Filled || 
-                    e.OrderState == OrderState.Cancelled || 
-                    e.OrderState == OrderState.Rejected)
+                if (e.Order.OrderState == OrderState.Filled || 
+                    e.Order.OrderState == OrderState.Cancelled || 
+                    e.Order.OrderState == OrderState.Rejected)
                 {
-                    Log(LogLevel.TRACE, $"Order {e.Order.OrderId} reached terminal state: {e.OrderState}");
+                    Log(LogLevel.TRACE, $"Order {e.Order.OrderId} reached terminal state: {e.Order.OrderState}");
                     
                     // Delay removal to allow final status queries
                     Task.Delay(TimeSpan.FromMinutes(5)).ContinueWith(_ => {
@@ -127,7 +128,7 @@ namespace NinjaTrader.NinjaScript.AddOns
             }
             catch (Exception ex)
             {
-                Log(LogLevel.ERROR, $"Error in OnOrderUpdate: {ex.Message}");
+                Log(LogLevel.ERROR, $"Error in OnOrderExecution: {ex.Message}");
             }
         }
         
@@ -153,8 +154,8 @@ namespace NinjaTrader.NinjaScript.AddOns
                         Order orderToRemove;
                         if (activeOrders.TryRemove(completedOrders[i].OrderId, out orderToRemove))
                         {
-                            // Unsubscribe from events
-                            orderToRemove.OrderUpdate -= OnOrderUpdate;
+                            // Unsubscribe from execution events
+                            orderToRemove.Execution -= OnOrderExecution;
                             orderCleanupCount++;
                         }
                     }
@@ -677,8 +678,9 @@ namespace NinjaTrader.NinjaScript.AddOns
                 Log(LogLevel.TRACE, $"Created order: {order.OrderId}");                
                 currentAccount.Submit(new[] { order });
                 
-                // **NEW: Subscribe to order updates for automatic cleanup**
-                order.OrderUpdate += OnOrderUpdate;
+                // **NEW: Subscribe to order execution events for automatic cleanup**
+                // Note: NinjaTrader uses Execution event, not OrderUpdate
+                order.Execution += OnOrderExecution;
                 
                 Log(LogLevel.INFO, $"ORDER PLACED: {action} {quantity} {instrumentName} @ {orderType} (ID:{order.OrderId})");
                 
