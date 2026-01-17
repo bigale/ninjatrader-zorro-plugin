@@ -1,4 +1,4 @@
-# Plugin Upgrade Notes
+﻿# Plugin Upgrade Notes
 
 ## Version 1.0.0 - Foundation Improvements
 

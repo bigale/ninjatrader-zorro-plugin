@@ -17,9 +17,9 @@
 | **Overall Compliance** | ⚠️ | ~75% (up from ~60% in v1.0.0) |
 
 ### Critical Gaps
-1. ? **BrokerHistory2** - Not implemented (prevents backtesting)
-2. ? **BrokerHistory** - Not implemented (legacy support missing)
-3. ? **BrokerBuy** - Not implemented (fallback missing)
+1. ❌ **BrokerHistory2** - Not implemented (prevents backtesting)
+2. ❌ **BrokerHistory** - Not implemented (legacy support missing)
+3. ❌ **BrokerBuy** - Not implemented (fallback missing)
 4. ⚠️ **BrokerAsset** - Incomplete (missing contract specifications)
 5. ⚠️ **BrokerTime** - Returns local time, not broker server time
 
@@ -1022,7 +1022,7 @@ DLLFUNC double BrokerCommand(int Command, DWORD dwParameter)
 int BrokerBuy(char* Asset, int Amount, double dStopDist, double* pPrice)
 ```
 
-**Status:** ? Not Implemented
+**Status:** ❌ Not Implemented
 
 **Impact:** LOW - BrokerBuy2 is preferred, BrokerBuy is legacy fallback
 
@@ -1035,7 +1035,7 @@ int BrokerBuy(char* Asset, int Amount, double dStopDist, double* pPrice)
 int BrokerSell(int nTradeID, int nAmount)
 ```
 
-**Status:** ? Not Implemented
+**Status:** ❌ Not Implemented
 
 **Impact:** LOW - BrokerSell2 is preferred, BrokerSell is legacy fallback
 
@@ -1119,34 +1119,34 @@ int BrokerSell(int nTradeID, int nAmount)
 ## Conclusion
 
 ### Strengths
-1. ? All **critical trading functions** work correctly
-2. ? Order placement (Buy2) and closing (Sell2) are **fully compliant**
-3. ? Proper handling of pending orders (negative IDs)
-4. ? Good error handling and logging
-5. ? Clean, maintainable code
-6. ? **v1.1.0: BrokerAccount returns correct unrealized P&L**
-7. ? **v1.1.0: BrokerAsset returns contract specs from NT8**
-8. ? **v1.1.0: BrokerHistory2 implemented for historical data**
+1. ✅ All **critical trading functions** work correctly
+2. ✅ Order placement (Buy2) and closing (Sell2) are **fully compliant**
+3. ✅ Proper handling of pending orders (negative IDs)
+4. ✅ Good error handling and logging
+5. ✅ Clean, maintainable code
+6. ✅ **v1.1.0: BrokerAccount returns correct unrealized P&L**
+7. ✅ **v1.1.0: BrokerAsset returns contract specs from NT8**
+8. ✅ **v1.1.0: BrokerHistory2 implemented for historical data**
 
 ### Weaknesses
 1. ⚠️ Some BrokerCommand features missing (low priority)
-2. ? No legacy BrokerBuy/BrokerSell (low impact)
+2. ❌ No legacy BrokerBuy/BrokerSell (low impact)
 
 ### Recommendation
 
-**For Live Trading:** Plugin is **PRODUCTION READY** ?
+**For Live Trading:** Plugin is **PRODUCTION READY** ✅
 
-**For Backtesting:** Plugin is **READY** with historical data support (v1.1.0+) ?
+**For Backtesting:** Plugin is **READY** with historical data support (v1.1.0+) ✅
 
 **Overall Grade:** **A-** (75% compliance, up from B at 65%)
 
 ### Version History
 
 **v1.1.0 (Current)**
-- ? Fixed Issue #6: BrokerAccount returns unrealized P&L
-- ? Fixed Issue #5: BrokerAsset returns contract specifications
-- ? Fixed Issue #9: Thread safety in ZorroBridge AddOn
-- ? Added BrokerHistory2 for historical data download
+- ✅ Fixed Issue #6: BrokerAccount returns unrealized P&L
+- ✅ Fixed Issue #5: BrokerAsset returns contract specifications
+- ✅ Fixed Issue #9: Thread safety in ZorroBridge AddOn
+- ✅ Added BrokerHistory2 for historical data download
 - Compliance improved from ~60% to ~75%
 
 **v1.0.0**

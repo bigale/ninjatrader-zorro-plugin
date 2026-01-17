@@ -1,4 +1,4 @@
-# Contributing to NinjaTrader 8 Zorro Plugin
+﻿# Contributing to NinjaTrader 8 Zorro Plugin
 
 Thank you for your interest in contributing! This document provides guidelines for contributing to the project.
 

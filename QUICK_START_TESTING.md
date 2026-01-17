@@ -1,10 +1,8 @@
-# Quick Start: C++ DLL Testing
+﻿# Quick Start: C++ DLL Testing
 
 ## What Just Got Implemented
 
-You now have **automated C++ test scripts** that replace the old Lite-C tests! ?? 
-
-## How to Use
+You now have **automated C++ test scripts** that replace the old Lite-C tests! ?? ## How to Use
 
 ### Option 1: Automated Test Runner (Recommended)
 
