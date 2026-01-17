@@ -8,6 +8,11 @@ function run()
 	
 	if(is(INITRUN)) {
 		brokerCommand(SET_DIAGNOSTICS, 2);  // Maximum logging
+		
+		// **NEW: Enable TRACE logging in NinjaTrader AddOn**
+		string traceCmd = "SETLOGLEVEL:TRACE";
+		// This will make NT log EVERY command it receives
+		
 		asset("MESH26");
 		printf("\n========================================");
 		printf("\n=== Simple Order Test for Zorro 2.70 ===");
@@ -94,6 +99,8 @@ function run()
 		printf("\n\n========================================");
 		printf("\n=== Test Complete ===");
 		printf("\n========================================\n");
+		printf("\n? CHECK NINJATRADER OUTPUT FOR TRACE LOGS!");
+		printf("\n? Look for <<COMMAND: lines to see what was received");
 		quit("Simple order test finished");
 	}
 }

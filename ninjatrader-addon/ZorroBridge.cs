@@ -243,6 +243,9 @@ namespace NinjaTrader.NinjaScript.AddOns
         {
             try
             {
+                // **CRITICAL TRACE: Log EVERY command received**
+                Log(LogLevel.TRACE, $"<< COMMAND: {command}");
+                
                 string[] parts = command.Split(':');
                 string cmd = parts[0].ToUpper();
 
@@ -279,6 +282,7 @@ namespace NinjaTrader.NinjaScript.AddOns
                         return HandleGetPosition(parts);
 
                     case "PLACEORDER":
+                        Log(LogLevel.ERROR, $"!! PLACEORDER RECEIVED: {command}");
                         return HandlePlaceOrder(parts);
 
                     case "CANCELORDER":
@@ -297,11 +301,13 @@ namespace NinjaTrader.NinjaScript.AddOns
                         return HandleGetInstruments();
 
                     default:
+                        Log(LogLevel.WARN, $"Unknown command: {cmd}");
                         return $"ERROR:Unknown command: {cmd}";
                 }
             }
             catch (Exception ex)
             {
+                Log(LogLevel.ERROR, $"Error processing command: {ex.Message}");
                 return $"ERROR:{ex.Message}";
             }
         }
@@ -367,8 +373,12 @@ namespace NinjaTrader.NinjaScript.AddOns
             Log(LogLevel.INFO, $"Subscribed to {instrumentName}");
             Log(LogLevel.DEBUG, $"Contract specs: TickSize={tickSize} PointValue={pointValue}");
             
+            // **CRITICAL TRACE: Log what we're returning to Zorro**
+            string response = $"OK:Subscribed:{instrumentName}:{tickSize}:{pointValue}";
+            Log(LogLevel.TRACE, $"SUBSCRIBE RESPONSE: {response}");
+            
             // Return format: OK:Subscribed:{instrument}:{tickSize}:{pointValue}
-            return $"OK:Subscribed:{instrumentName}:{tickSize}:{pointValue}";
+            return response;
         }
 
         private string HandleUnsubscribe(string[] parts)
@@ -432,7 +442,10 @@ namespace NinjaTrader.NinjaScript.AddOns
                 Log(LogLevel.DEBUG, $"Price {zorroSymbol}: L:{last} B:{bid} A:{ask}");
                 Log(LogLevel.TRACE, $"Volume: {volume}");
 
-                return $"PRICE:{last}:{bid}:{ask}:{volume}";
+                string response = $"PRICE:{last}:{bid}:{ask}:{volume}";
+                Log(LogLevel.TRACE, $"GETPRICE RESPONSE: {response}");
+                
+                return response;
             }
             catch (Exception ex)
             {
