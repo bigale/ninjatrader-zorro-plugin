@@ -217,8 +217,7 @@ style NodeName fill:#HEXCOLOR,stroke:#333,stroke-width:2px,color:#000
 .\private-docs\build-and-test.bat  # Build + test
 ```
 
-### **CRITICAL: Test Before Commit**
-?? **NEVER commit code changes without confirming tests pass!**
+### **CRITICAL: Test Before Commit** ?? **NEVER commit code changes without confirming tests pass!**
 
 **Required workflow:**
 1. Make code changes

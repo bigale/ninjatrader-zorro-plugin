@@ -77,19 +77,94 @@ foreach ($file in $mdFiles) {
         $fixCount += $count
     }
     
-    # Fix "- ?" pattern (broken checkmarks in lists)
-    if ($content -match '-\s+\?') {
-        $matches = [regex]::Matches($content, '-\s+\?')
-        $content = $content -replace '-\s+\?', '- ?'
+    # **NEW: Fix status indicators (checkmarks and warnings)**
+    # These are the most common patterns in our markdown files:
+    
+    # Pattern 1: "?? " or "??" at start of line or after pipe = WARNING (??)
+    # Replace with ?? emoji (will render correctly)
+    $pattern1 = '(\|\s*)\?\?\s+'  # Table cells: | ?? 
+    if ($content -match $pattern1) {
+        $matches = [regex]::Matches($content, $pattern1)
+        $content = $content -replace $pattern1, '$1?? '
         $fixCount += $matches.Count
-        Write-Host "  [FIX] Replaced $($matches.Count) broken checkmark(s) '- ?' in: $relativePath" -ForegroundColor Cyan
+        Write-Host "  [FIX] Replaced $($matches.Count) warning indicator(s) '?? ' with '??' in: $relativePath" -ForegroundColor Cyan
     }
     
-    # Check for multiple consecutive question marks (often indicates encoding issues)
-    if ($content -match '\?{2,}') {
-        $matches = [regex]::Matches($content, '\?{2,}')
-        Write-Host "  [WARN] Found $($matches.Count) instance(s) of multiple '?' in: $relativePath" -ForegroundColor Yellow
-        Write-Host "         This might indicate Unicode rendering issues" -ForegroundColor Gray
+    # Pattern 2: "?? " at start of line (headers, list items)
+    $pattern2 = '^(\s*)(#{1,6}\s+)?\?\?\s+'
+    if ($content -match $pattern2) {
+        $matches = [regex]::Matches($content, $pattern2, [System.Text.RegularExpressions.RegexOptions]::Multiline)
+        $content = $content -replace $pattern2, '$1$2?? '
+        $fixCount += $matches.Count
+        Write-Host "  [FIX] Replaced $($matches.Count) heading/list warning(s) '?? ' with '??' in: $relativePath" -ForegroundColor Cyan
+    }
+    
+    # Pattern 3: Single "? " in specific contexts = CHECKMARK (?)
+    # Only replace in contexts where it's clearly a status indicator
+    
+    # 3a: Table cells with single "? "
+    $pattern3a = '(\|\s*)\?\s+([A-Z])'  # | ? PASS or | ? Yes
+    if ($content -match $pattern3a) {
+        $matches = [regex]::Matches($content, $pattern3a)
+        $content = $content -replace $pattern3a, '$1? $2'
+        $fixCount += $matches.Count
+        Write-Host "  [FIX] Replaced $($matches.Count) checkmark(s) '? ' with '?' in: $relativePath" -ForegroundColor Cyan
+    }
+    
+    # 3b: List items starting with "? " (status indicators)
+    $pattern3b = '^(\s*-\s+)\?\s+'
+    if ($content -match $pattern3b) {
+        $matches = [regex]::Matches($content, $pattern3b, [System.Text.RegularExpressions.RegexOptions]::Multiline)
+        $content = $content -replace $pattern3b, '$1? '
+        $fixCount += $matches.Count
+        Write-Host "  [FIX] Replaced $($matches.Count) list checkmark(s) '- ? ' with '- ?' in: $relativePath" -ForegroundColor Cyan
+    }
+    
+    # 3c: Headers with "? " prefix
+    $pattern3c = '^(#{1,6}\s+)\?\s+'
+    if ($content -match $pattern3c) {
+        $matches = [regex]::Matches($content, $pattern3c, [System.Text.RegularExpressions.RegexOptions]::Multiline)
+        $content = $content -replace $pattern3c, '$1? '
+        $fixCount += $matches.Count
+        Write-Host "  [FIX] Replaced $($matches.Count) header checkmark(s) '# ? ' with '# ?' in: $relativePath" -ForegroundColor Cyan
+    }
+    
+    # Pattern 4: Status words followed by single "?" 
+    # Example: "Status: ? Not Implemented" or "Impact: ? LOW"
+    $pattern4 = '(Status|Implemented\?|Compliant\?|Required\?):\s+\?\s+'
+    if ($content -match $pattern4) {
+        $matches = [regex]::Matches($content, $pattern4)
+        $content = $content -replace $pattern4, '$1: ? '
+        $fixCount += $matches.Count
+        Write-Host "  [FIX] Replaced $($matches.Count) negative status '?' with '?' in: $relativePath" -ForegroundColor Cyan
+    }
+    
+    # Pattern 5: "??" in middle of sentence = keep as warning
+    $pattern5 = '\s\?\?\s'
+    if ($content -match $pattern5) {
+        $matches = [regex]::Matches($content, $pattern5)
+        $content = $content -replace $pattern5, ' ?? '
+        $fixCount += $matches.Count
+        Write-Host "  [FIX] Replaced $($matches.Count) inline warning(s) '??' with '??' in: $relativePath" -ForegroundColor Cyan
+    }
+    
+    # LAST: Check for remaining question marks that might need attention
+    # (but don't auto-fix these - they might be legitimate)
+    $remainingQuestions = [regex]::Matches($content, '\?')
+    if ($remainingQuestions.Count -gt 0) {
+        # Filter out legitimate uses (in URLs, code blocks, actual questions)
+        $suspiciousCount = 0
+        foreach ($match in $remainingQuestions) {
+            $context = $content.Substring([Math]::Max(0, $match.Index - 10), [Math]::Min(20, $content.Length - $match.Index + 10))
+            # Skip if in URL, code block, or looks like actual question
+            if ($context -notmatch '(http|```|SELECT|WHERE|\w\?$)') {
+                $suspiciousCount++
+            }
+        }
+        
+        if ($suspiciousCount -gt 0) {
+            Write-Host "  [INFO] $suspiciousCount potentially suspicious '?' characters remain in: $relativePath" -ForegroundColor Gray
+        }
     }
     
     # Save if modified
@@ -119,5 +194,7 @@ if ($WhatIf) {
 }
 
 Write-Host ""
-Write-Host "To search for remaining question marks manually:" -ForegroundColor Yellow
-Write-Host '  Select-String -Path "*.md" -Pattern "\?" -Exclude "private-docs\*"' -ForegroundColor Gray
+Write-Host "Emoji replacements:" -ForegroundColor Yellow
+Write-Host "  ? = Success/Pass/Implemented" -ForegroundColor Green
+Write-Host "  ??  = Warning/Partial/Issues" -ForegroundColor Yellow  
+Write-Host "  ? = Failed/Not Implemented" -ForegroundColor Red

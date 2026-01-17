@@ -2,7 +2,7 @@
 
 ## What Just Got Implemented
 
-You now have **automated C++ test scripts** that replace the old Lite-C tests! ??
+You now have **automated C++ test scripts** that replace the old Lite-C tests! ?? 
 
 ## How to Use
 
@@ -86,4 +86,4 @@ cmake --build . --config Release --target PositionTest
 
 ---
 
-**You now have professional-grade testing with full C++ power!** ??
+**You now have professional-grade testing with full C++ power!** ?? 

@@ -354,4 +354,4 @@ All improvements follow **Zorro team's patterns** from the official Bittrex plug
 
 **Recommendation**: Upgrade and use default settings (level 0) for production, enable level 1 or 2 when debugging.
 
-Enjoy cleaner logs and better user experience! ??
+Enjoy cleaner logs and better user experience! ?? 
