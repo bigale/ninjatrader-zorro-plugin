@@ -439,7 +439,11 @@ DLLFUNC int BrokerAsset(char* Asset, double* pPrice, double* pSpread,
             *pPip = it->second.tickSize;
             LogDebug("# Returning tick size for %s: %.4f", Asset, it->second.tickSize);
         } else {
-            *pPip = 0;  // Let Zorro use asset file (fallback)
+            // **ZORRO 2.70 FIX: Must return non-zero default**
+            // Default tick size for micro futures (MES, MNQ, etc.)
+            // Zorro will use Assets.csv if available, otherwise this default
+            *pPip = 0.25;
+            LogInfo("# Using default tick size %.4f for %s (AddOn specs not available)", *pPip, Asset);
         }
     }
     
@@ -449,11 +453,17 @@ DLLFUNC int BrokerAsset(char* Asset, double* pPrice, double* pSpread,
             *pPipCost = it->second.pointValue;
             LogDebug("# Returning point value for %s: %.2f", Asset, it->second.pointValue);
         } else {
-            *pPipCost = 0;  // Let Zorro use asset file (fallback)
+            // **ZORRO 2.70 FIX: Must return non-zero default**
+            // Default point value for MES ($1.25 per 0.25 tick)
+            // Zorro will use Assets.csv if available, otherwise this default
+            *pPipCost = 1.25;
+            LogInfo("# Using default point value $%.2f for %s (AddOn specs not available)", *pPipCost, Asset);
         }
     }
     
-    if (pLotAmount) *pLotAmount = 1;
+    // **CRITICAL: LotAmount must be non-zero for Zorro 2.70**
+    if (pLotAmount) *pLotAmount = 1.0;
+    
     if (pMargin) *pMargin = 0;
     
     // We got valid price data
