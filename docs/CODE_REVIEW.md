@@ -1,8 +1,8 @@
-# Code Review: NT8 Plugin & ZorroBridge AddOn
+﻿# Code Review: NT8 Plugin & ZorroBridge AddOn
 **Date:** 2025-01-11  
 **Reviewer:** AI Code Analysis  
 **Scope:** C++ Plugin (NT8.dll) + C# AddOn (ZorroBridge.cs)  
-**Status:** ?? **CRITICAL ISSUES FOUND** - Review Required
+**Status:** ⚠️ **CRITICAL ISSUES FOUND** - Review Required
 
 ---
 
@@ -19,10 +19,10 @@ The codebase is **functional for basic use cases** but has **significant issues*
 5. **No connection recovery** if TCP link drops
 
 ### Risk Level
-- **Data Corruption Risk:** ?? Medium (position cache can drift)
-- **Memory Leak Risk:** ?? Medium (order maps never cleaned up)
-- **Crash Risk:** ?? Low (basic error handling present)
-- **Trading Error Risk:** ?? Medium-High (position desync could cause double-fills)
+- **Data Corruption Risk:** ⚠️ Medium (position cache can drift)
+- **Memory Leak Risk:** ⚠️ Medium (order maps never cleaned up)
+- **Crash Risk:** ⚠️ Low (basic error handling present)
+- **Trading Error Risk:** ⚠️ Medium-High (position desync could cause double-fills)
 
 ---
 
@@ -36,7 +36,7 @@ The codebase is **functional for basic use cases** but has **significant issues*
 - Proper logging levels for debugging
 - Negative ID convention for pending orders is clever
 
-#### ?? Issues Found
+#### ⚠️ Issues Found
 
 ##### **Issue #1: Position Cache Desynchronization**
 **Severity:** HIGH  
@@ -310,7 +310,7 @@ std::mutex g_stateMutex;
 - Proper symbol conversion (Zorro ? NT8 format)
 - Heartbeat keeps log clean in production
 
-#### ?? Critical Issues
+#### ⚠️ Critical Issues
 
 ##### **Issue #8: activeOrders Dictionary Never Cleaned**
 **Severity:** HIGH
@@ -555,7 +555,7 @@ return $"ORDER:{order.OrderId}";
 - `GETPRICE/GETACCOUNT/GETPOSITION` - ? Queries
 - `PLACEORDER/CANCELORDER/GETORDERSTATUS` - ? Trading
 
-#### ?? Issues
+#### ⚠️ Issues
 
 ##### **Issue #14: No Protocol Version Negotiation**
 **Severity:** LOW
@@ -716,9 +716,9 @@ if (instrument.MarketData == null) {
 - `std::map` handles memory - ? No manual `new/delete`
 - RAII throughout - ? Minimal leak risk
 
-#### ?? Concerns
-- Order maps never pruned - ?? Slow leak
-- String copies in hot path - ?? Minor performance hit
+#### ⚠️ Concerns
+- Order maps never pruned - ⚠️ Slow leak
+- String copies in hot path - ⚠️ Minor performance hit
 
 ---
 
@@ -728,9 +728,9 @@ if (instrument.MarketData == null) {
 - Garbage collector handles most cleanup
 - `using` statement for NetworkStream - ? Proper disposal
 
-#### ?? Concerns
-- Order dictionary grows forever - ?? Memory leak
-- Thread objects never joined/disposed - ?? Minor leak
+#### ⚠️ Concerns
+- Order dictionary grows forever - ⚠️ Memory leak
+- Thread objects never joined/disposed - ⚠️ Minor leak
 
 ---
 
@@ -838,13 +838,13 @@ if (instrument.MarketData == null) {
 
 | Component | Status | Risk Level | Ready for Live? |
 |-----------|--------|------------|-----------------|
-| C++ Plugin Core | ?? Solid | LOW | ? Yes (v1.1.0+) |
-| C# AddOn Core | ?? Solid | LOW | ? Yes (v1.1.0+) |
-| TCP Protocol | ?? Solid | LOW | ? Yes |
-| Order Placement | ?? Works | LOW | ? Yes |
-| Position Tracking | ?? Validated | LOW | ? Yes (v1.1.0+) |
-| Error Handling | ?? Good | LOW | ? Yes |
-| Long-Term Stability | ?? Good | LOW-MEDIUM | ?? Monitor (order cleanup pending) |
+| C++ Plugin Core | ⚠️ Solid | LOW | ✅ Yes (v1.1.0+) |
+| C# AddOn Core | ⚠️ Solid | LOW | ✅ Yes (v1.1.0+) |
+| TCP Protocol | ⚠️ Solid | LOW | ✅ Yes |
+| Order Placement | ⚠️ Works | LOW | ✅ Yes |
+| Position Tracking | ⚠️ Validated | LOW | ✅ Yes (v1.1.0+) |
+| Error Handling | ⚠️ Good | LOW | ✅ Yes |
+| Long-Term Stability | ⚠️ Good | LOW-MEDIUM | ⚠️ Monitor (order cleanup pending) |
 
 ### Recommendation
 
@@ -862,8 +862,8 @@ All Priority 1 issues resolved:
 - ? Backtesting with historical data (v1.1.0+)
 
 **Monitor for:**
-- ?? Order map cleanup in long-running sessions (Priority 2)
-- ?? TCP reconnection if network issues occur (Priority 2)
+- ⚠️ Order map cleanup in long-running sessions (Priority 2)
+- ⚠️ TCP reconnection if network issues occur (Priority 2)
 
 ---
 

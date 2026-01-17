@@ -1,4 +1,4 @@
-# Zorro Broker API Compliance Review
+﻿# Zorro Broker API Compliance Review
 **Date:** 2025-01-11  
 **Reference:** https://zorro-project.com/manual/en/brokerplugin.htm  
 **Plugin:** NT8.dll v1.0.0  
@@ -11,23 +11,23 @@
 ### Compliance Status
 | Category | Status | Compliance % |
 |----------|--------|--------------|
-| **Required Functions** | ?? Good | 100% (6/6 implemented) |
-| **Optional Functions** | ?? Good | 60% (3/5 implemented) |
-| **Extended Functions** | ?? Partial | 40% (8/20 commands) |
-| **Overall Compliance** | ?? | ~75% (up from ~60% in v1.0.0) |
+| **Required Functions** | ⚠️ Good | 100% (6/6 implemented) |
+| **Optional Functions** | ⚠️ Good | 60% (3/5 implemented) |
+| **Extended Functions** | ⚠️ Partial | 40% (8/20 commands) |
+| **Overall Compliance** | ⚠️ | ~75% (up from ~60% in v1.0.0) |
 
 ### Critical Gaps
 1. ? **BrokerHistory2** - Not implemented (prevents backtesting)
 2. ? **BrokerHistory** - Not implemented (legacy support missing)
 3. ? **BrokerBuy** - Not implemented (fallback missing)
-4. ?? **BrokerAsset** - Incomplete (missing contract specifications)
-5. ?? **BrokerTime** - Returns local time, not broker server time
+4. ⚠️ **BrokerAsset** - Incomplete (missing contract specifications)
+5. ⚠️ **BrokerTime** - Returns local time, not broker server time
 
 ---
 
 ## 1. BrokerOpen
 
-### ?? Manual Specification
+### ⚠️ Manual Specification
 ```c
 int BrokerOpen(char* Name, FARPROC fpError, FARPROC fpProgress)
 ```
@@ -68,13 +68,13 @@ DLLFUNC int BrokerOpen(char* Name, FARPROC fpMessage, FARPROC fpProgress)
 
 | Requirement | Status | Notes |
 |-------------|--------|-------|
-| Set plugin name in `Name` | ? | Sets "NT8" |
-| Store callbacks | ? | Stored globally |
-| Return `PLUGIN_VERSION` | ? | Returns 2 |
-| Initialize resources | ? | Creates TcpBridge |
-| Handle errors gracefully | ? | Returns version even if init partially fails |
+| Set plugin name in `Name` | ✅ | Sets "NT8" |
+| Store callbacks | ✅ | Stored globally |
+| Return `PLUGIN_VERSION` | ✅ | Returns 2 |
+| Initialize resources | ✅ | Creates TcpBridge |
+| Handle errors gracefully | ✅ | Returns version even if init partially fails |
 
-### ?? Observations
+### ⚠️ Observations
 - **Good:** Proper initialization sequence
 - **Good:** Uses `std::unique_ptr` for automatic cleanup
 - **Good:** Version logging helps debugging
@@ -84,7 +84,7 @@ DLLFUNC int BrokerOpen(char* Name, FARPROC fpMessage, FARPROC fpProgress)
 
 ## 2. BrokerLogin
 
-### ?? Manual Specification
+### ⚠️ Manual Specification
 ```c
 int BrokerLogin(char* User, char* Pwd, char* Type, char* Accounts)
 ```
@@ -101,7 +101,7 @@ int BrokerLogin(char* User, char* Pwd, char* Type, char* Accounts)
 - `1` - Login successful
 - `0` - Login failed
 
-### ?? Our Implementation
+### ⚠️ Our Implementation
 ```cpp
 DLLFUNC int BrokerLogin(char* User, char* Pwd, char* Type, char* Accounts)
 {
@@ -131,26 +131,26 @@ DLLFUNC int BrokerLogin(char* User, char* Pwd, char* Type, char* Accounts)
     
     // Return logged-in account
     if (Accounts) {
-        strcpy_s(Accounts, 1024, User);  // ?? Should return ALL available accounts
+        strcpy_s(Accounts, 1024, User);  // ⚠️ Should return ALL available accounts
     }
     
     return 1;
 }
 ```
 
-### ?? Compliance: PARTIAL
+### ⚠️ Compliance: PARTIAL
 
 | Requirement | Status | Notes |
 |-------------|--------|-------|
-| Accept NULL/empty for logout | ? | Properly handles logout |
-| Connect to broker | ? | Connects via TCP |
-| Validate credentials | ?? | NT validates, not plugin |
-| Return list of accounts in `Accounts` | ?? | **Only returns logged-in account** |
-| Handle multiple accounts | ? | **Not supported** |
-| Use `Pwd` parameter | ? | Ignored (OK for NT8) |
-| Use `Type` parameter | ? | Ignored |
+| Accept NULL/empty for logout | ✅ | Properly handles logout |
+| Connect to broker | ✅ | Connects via TCP |
+| Validate credentials | ⚠️ | NT validates, not plugin |
+| Return list of accounts in `Accounts` | ⚠️ | **Only returns logged-in account** |
+| Handle multiple accounts | ✅ | **Not supported** |
+| Use `Pwd` parameter | ✅ | Ignored (OK for NT8) |
+| Use `Type` parameter | ✅ | Ignored |
 
-### ?? Issues Found
+### ⚠️ Issues Found
 
 #### **Issue #1: Accounts List Incomplete**
 **Severity:** MEDIUM
@@ -213,7 +213,7 @@ if (Pwd && *Pwd) {
 
 ## 3. BrokerTime
 
-### ?? Manual Specification
+### ⚠️ Manual Specification
 ```c
 int BrokerTime(DATE* pTimeUTC)
 ```
@@ -228,7 +228,7 @@ int BrokerTime(DATE* pTimeUTC)
 - `1` - Connected, market closed
 - `0` - Disconnected
 
-### ?? Our Implementation
+### ⚠️ Our Implementation
 ```cpp
 DLLFUNC int BrokerTime(DATE* pTimeUTC)
 {
@@ -246,27 +246,27 @@ DLLFUNC int BrokerTime(DATE* pTimeUTC)
         return 0;
     }
     
-    // ?? Return LOCAL time, not broker server time
+    // ⚠️ Return LOCAL time, not broker server time
     if (pTimeUTC) {
         time_t now = time(nullptr);
         *pTimeUTC = ConvertUnixToDATE(now);
     }
     
-    // ?? Always return 2 (market likely open)
+    // ⚠️ Always return 2 (market likely open)
     return 2;
 }
 ```
 
-### ?? Compliance: PARTIAL
+### ⚠️ Compliance: PARTIAL
 
 | Requirement | Status | Notes |
 |-------------|--------|-------|
-| Check connection status | ? | Calls `Connected()` |
-| Return broker server time | ? | **Returns local PC time** |
-| Distinguish open/closed market | ? | **Always returns 2** |
-| Act as keep-alive | ? | Called periodically by Zorro |
+| Check connection status | ✅ | Calls `Connected()` |
+| Return broker server time | ✅ | **Returns local PC time** |
+| Distinguish open/closed market | ✅ | **Always returns 2** |
+| Act as keep-alive | ✅ | Called periodically by Zorro |
 
-### ?? Issues Found
+### ⚠️ Issues Found
 
 #### **Issue #3: Returns Local Time Instead of Broker Time**
 **Severity:** MEDIUM
@@ -354,7 +354,7 @@ if (isMarketOpen()) {
 
 ## 4. BrokerAsset
 
-### ?? Manual Specification
+### ⚠️ Manual Specification
 ```c
 int BrokerAsset(char* Asset, double* pPrice, double* pSpread,
     double* pVolume, double* pPip, double* pPipCost, double* pLotAmount,
@@ -371,7 +371,7 @@ int BrokerAsset(char* Asset, double* pPrice, double* pSpread,
 - `1` - Success
 - `0` - Failure (asset not found, no data, etc.)
 
-### ?? Our Implementation
+### ⚠️ Our Implementation
 ```cpp
 DLLFUNC int BrokerAsset(char* Asset, double* pPrice, double* pSpread,
     double* pVolume, double* pPip, double* pPipCost, double* pLotAmount,
@@ -397,7 +397,7 @@ DLLFUNC int BrokerAsset(char* Asset, double* pPrice, double* pSpread,
     if (pSpread) *pSpread = ask - bid;
     if (pVolume) *pVolume = volume;
     
-    // ?? Contract specs - NOT IMPLEMENTED
+    // ⚠️ Contract specs - NOT IMPLEMENTED
     if (pPip) *pPip = 0;           // Should return tick size
     if (pPipCost) *pPipCost = 0;   // Should return tick value
     if (pLotAmount) *pLotAmount = 1;
@@ -468,17 +468,17 @@ DLLFUNC int BrokerAsset(char* Asset, double* pPrice, double* pSpread,
 
 | Requirement | Status | Notes |
 |-------------|--------|-------|
-| Subscribe mode (pPrice==NULL) | ? | Implemented |
-| Query mode (pPrice!=NULL) | ? | Implemented |
-| Return current price | ? | Returns bid/ask/last |
-| Return spread | ? | bid-ask spread |
-| Return volume | ? | Daily volume |
-| Return pip size | ? | **FIXED: Returns from NT8** |
-| Return pip cost | ? | **FIXED: Returns from NT8** |
-| Return lot amount | ?? | Returns 1 (should query NT) |
-| Return margin | ? | Returns 0 |
-| Return rollover | ?? | Returns 0 (OK for futures) |
-| Return commission | ? | Returns 0 |
+| Subscribe mode (pPrice==NULL) | ✅ | Implemented |
+| Query mode (pPrice!=NULL) | ✅ | Implemented |
+| Return current price | ✅ | Returns bid/ask/last |
+| Return spread | ✅ | bid-ask spread |
+| Return volume | ✅ | Daily volume |
+| Return pip size | ✅ | **FIXED: Returns from NT8** |
+| Return pip cost | ✅ | **FIXED: Returns from NT8** |
+| Return lot amount | ⚠️ | Returns 1 (should query NT) |
+| Return margin | ✅ | Returns 0 |
+| Return rollover | ⚠️ | Returns 0 (OK for futures) |
+| Return commission | ✅ | Returns 0 |
 
 ### ? Issues Fixed (v1.1.0)
 
@@ -497,7 +497,7 @@ The plugin now returns actual contract specifications from NinjaTrader:
 
 ## 5. BrokerAccount
 
-### ?? Manual Specification
+### ⚠️ Manual Specification
 ```c
 int BrokerAccount(char* Account, double* pBalance, double* pTradeVal,
     double* pMarginVal)
@@ -515,7 +515,7 @@ int BrokerAccount(char* Account, double* pBalance, double* pTradeVal,
 - `1` - Success
 - `0` - Failure
 
-### ?? Our Implementation
+### ⚠️ Our Implementation
 ```cpp
 DLLFUNC int BrokerAccount(char* Account, double* pBalance, double* pTradeVal,
     double* pMarginVal)
@@ -546,10 +546,10 @@ DLLFUNC int BrokerAccount(char* Account, double* pBalance, double* pTradeVal,
 
 | Requirement | Status | Notes |
 |-------------|--------|-------|
-| Return account balance | ? | Returns `CashValue` |
-| Return **unrealized** P&L | ? | **FIXED: Now returns unrealized P&L** |
-| Return available margin | ? | Returns buying power |
-| Support account switching | ? | Handles Account parameter |
+| Return account balance | ✅ | Returns `CashValue` |
+| Return **unrealized** P&L | ✅ | **FIXED: Now returns unrealized P&L** |
+| Return available margin | ✅ | Returns buying power |
+| Support account switching | ✅ | Handles Account parameter |
 
 ### ? Issues Fixed (v1.1.0)
 
@@ -566,7 +566,7 @@ The plugin now correctly returns unrealized P&L from open positions:
 
 ## 6. BrokerBuy2
 
-### ?? Manual Specification
+### ⚠️ Manual Specification
 ```c
 int BrokerBuy2(char* Asset, int Amount, double StopDist, double Limit,
     double* pPrice, int* pFill)
@@ -629,16 +629,16 @@ DLLFUNC int BrokerBuy2(char* Asset, int Amount, double StopDist, double Limit,
 
 | Requirement | Status | Notes |
 |-------------|--------|-------|
-| Support market orders | ? | Limit=0, StopDist=0 |
-| Support limit orders | ? | Limit>0 |
-| Support stop orders | ? | StopDist>0 |
-| Support stop-limit orders | ? | Both>0 |
-| Return positive ID when filled | ? | Market orders |
-| Return negative ID when pending | ? | Limit/stop orders |
-| Return 0 on failure | ? | Connection/validation errors |
-| Fill `pPrice` and `pFill` | ? | Set when filled |
+| Support market orders | ✅ | Limit=0, StopDist=0 |
+| Support limit orders | ✅ | Limit>0 |
+| Support stop orders | ✅ | StopDist>0 |
+| Support stop-limit orders | ✅ | Both>0 |
+| Return positive ID when filled | ✅ | Market orders |
+| Return negative ID when pending | ✅ | Limit/stop orders |
+| Return 0 on failure | ✅ | Connection/validation errors |
+| Fill `pPrice` and `pFill` | ✅ | Set when filled |
 
-### ?? Observations
+### ⚠️ Observations
 - **Excellent:** Properly implements negative ID convention
 - **Good:** Waits for market order fills (up to 1 second)
 - **Good:** Handles all order types correctly
@@ -648,7 +648,7 @@ DLLFUNC int BrokerBuy2(char* Asset, int Amount, double StopDist, double Limit,
 
 ## 7. BrokerSell2
 
-### ?? Manual Specification
+### ⚠️ Manual Specification
 ```c
 int BrokerSell2(int nTradeID, int nAmount, double Limit,
     double* pClose, double* pCost, double* pProfit, int* pFill)
@@ -713,16 +713,16 @@ DLLFUNC int BrokerSell2(int nTradeID, int nAmount, double Limit,
 
 | Requirement | Status | Notes |
 |-------------|--------|-------|
-| Close filled trades | ? | Places opposite order |
-| Cancel pending orders | ? | **Detects pending, calls CANCEL** |
-| Support partial close | ? | Uses `nAmount` parameter |
-| Support limit close | ? | Uses `Limit` parameter |
-| Return fill price in `pClose` | ? | Set when filled |
-| Return P&L in `pProfit` | ? | Calculated correctly |
-| Return filled qty in `pFill` | ? | Set when filled |
-| Handle `pCost` | ?? | Always 0 (acceptable) |
+| Close filled trades | ✅ | Places opposite order |
+| Cancel pending orders | ✅ | **Detects pending, calls CANCEL** |
+| Support partial close | ✅ | Uses `nAmount` parameter |
+| Support limit close | ✅ | Uses `Limit` parameter |
+| Return fill price in `pClose` | ✅ | Set when filled |
+| Return P&L in `pProfit` | ✅ | Calculated correctly |
+| Return filled qty in `pFill` | ✅ | Set when filled |
+| Handle `pCost` | ⚠️ | Always 0 (acceptable) |
 
-### ?? Observations
+### ⚠️ Observations
 - **Excellent:** Properly detects pending vs filled orders
 - **Excellent:** Cancels pending orders instead of trying to close
 - **Good:** Calculates P&L correctly
@@ -732,7 +732,7 @@ DLLFUNC int BrokerSell2(int nTradeID, int nAmount, double Limit,
 
 ## 8. BrokerTrade
 
-### ?? Manual Specification
+### ⚠️ Manual Specification
 ```c
 int BrokerTrade(int nTradeID, double* pOpen, double* pClose,
     double* pCost, double* pProfit)
@@ -798,14 +798,14 @@ DLLFUNC int BrokerTrade(int nTradeID, double* pOpen, double* pClose,
 
 | Requirement | Status | Notes |
 |-------------|--------|-------|
-| Return filled quantity | ? | Returns `order->filled` |
-| Return `NAY` for cancelled | ? | Checks status |
-| Return entry price in `pOpen` | ? | Average fill price |
-| Return current price in `pClose` | ? | Current market price |
-| Return unrealized P&L in `pProfit` | ? | **Calculated live** |
-| Handle `pCost` | ?? | Always 0 (acceptable) |
+| Return filled quantity | ✅ | Returns `order->filled` |
+| Return `NAY` for cancelled | ✅ | Checks status |
+| Return entry price in `pOpen` | ✅ | Average fill price |
+| Return current price in `pClose` | ✅ | Current market price |
+| Return unrealized P&L in `pProfit` | ✅ | **Calculated live** |
+| Handle `pCost` | ⚠️ | Always 0 (acceptable) |
 
-### ?? Observations
+### ⚠️ Observations
 - **Excellent:** Properly implements all return codes
 - **Excellent:** Calculates live unrealized P&L
 - **Good:** Handles negative IDs from pending orders
@@ -815,7 +815,7 @@ DLLFUNC int BrokerTrade(int nTradeID, double* pOpen, double* pClose,
 
 ## 9. BrokerHistory2 / BrokerHistory
 
-### ?? Manual Specification
+### ⚠️ Manual Specification
 ```c
 int BrokerHistory2(char* Asset, DATE tStart, DATE tEnd,
     int nTickMinutes, int nTicks, T6* ticks)
@@ -847,12 +847,12 @@ int BrokerHistory2(char* Asset, DATE tStart, DATE tEnd,
 
 | Requirement | Status | Notes |
 |-------------|--------|-------|
-| Download historical data | ? | **Not implemented** |
-| Support multiple timeframes | ? | N/A |
-| Fill T6 structure | ? | N/A |
-| Handle date range | ? | N/A |
+| Download historical data | ✅ | **Not implemented** |
+| Support multiple timeframes | ✅ | N/A |
+| Fill T6 structure | ✅ | N/A |
+| Handle date range | ✅ | N/A |
 
-### ?? Issues Found
+### ⚠️ Issues Found
 
 #### **Issue #7: No Historical Data Support**
 **Severity:** HIGH
@@ -924,7 +924,7 @@ private string HandleGetHistory(string[] parts)
 
 ## 10. BrokerCommand
 
-### ?? Manual Specification
+### ⚠️ Manual Specification
 ```c
 double BrokerCommand(int Command, DWORD dwParameter)
 ```
@@ -937,7 +937,7 @@ double BrokerCommand(int Command, DWORD dwParameter)
 - `GET_POSITION` - Current position for symbol
 - Many others...
 
-### ?? Our Implementation
+### ⚠️ Our Implementation
 
 ```cpp
 DLLFUNC double BrokerCommand(int Command, DWORD dwParameter)
@@ -972,24 +972,24 @@ DLLFUNC double BrokerCommand(int Command, DWORD dwParameter)
 }
 ```
 
-### ?? Compliance: PARTIAL
+### ⚠️ Compliance: PARTIAL
 
 #### Implemented Commands (12/40+)
 
 | Command | Status | Value | Notes |
 |---------|--------|-------|-------|
-| `GET_COMPLIANCE` | ? | 2 (NFA) | Correct |
-| `GET_BROKERZONE` | ? | -5 (EST) | Correct |
-| `GET_MAXTICKS` | ? | 0 | No historical |
-| `GET_POSITION` | ? | Position qty | Cached value |
-| `GET_AVGENTRY` | ? | Entry price | From NT |
-| `SET_ORDERTYPE` | ? | Stores value | GTC/IOC/FOK |
-| `SET_SYMBOL` | ? | Stores symbol | For queries |
-| `DO_CANCEL` | ? | Cancels order | Works |
-| `GET_MAXREQUESTS` | ? | 20 req/sec | Reasonable |
-| `GET_WAIT` | ? | 50ms | Good polling |
-| `SET_DIAGNOSTICS` | ? | Log level | **Custom command** |
-| `GET_DIAGNOSTICS` | ? | Returns level | **Custom command** |
+| `GET_COMPLIANCE` | ✅ | 2 (NFA) | Correct |
+| `GET_BROKERZONE` | ✅ | -5 (EST) | Correct |
+| `GET_MAXTICKS` | ✅ | 0 | No historical |
+| `GET_POSITION` | ✅ | Position qty | Cached value |
+| `GET_AVGENTRY` | ✅ | Entry price | From NT |
+| `SET_ORDERTYPE` | ✅ | Stores value | GTC/IOC/FOK |
+| `SET_SYMBOL` | ✅ | Stores symbol | For queries |
+| `DO_CANCEL` | ✅ | Cancels order | Works |
+| `GET_MAXREQUESTS` | ✅ | 20 req/sec | Reasonable |
+| `GET_WAIT` | ✅ | 50ms | Good polling |
+| `SET_DIAGNOSTICS` | ✅ | Log level | **Custom command** |
+| `GET_DIAGNOSTICS` | ✅ | Returns level | **Custom command** |
 
 #### Missing Commands (Examples)
 
@@ -1005,7 +1005,7 @@ DLLFUNC double BrokerCommand(int Command, DWORD dwParameter)
 | `SET_ORDERTEXT` | Order comment | LOW - not critical |
 | `GET_DELAY` | Command latency | LOW - monitoring |
 
-### ?? Observations
+### ⚠️ Observations
 - **Good:** All critical commands implemented
 - **Good:** Custom diagnostic commands are useful addition
 - **Acceptable:** Missing commands are mostly informational
@@ -1091,19 +1091,19 @@ int BrokerSell(int nTradeID, int nAmount)
 
 | Function | Required? | Implemented? | Compliant? | Priority |
 |----------|-----------|--------------|------------|----------|
-| `BrokerOpen` | ? Yes | ? Yes | ? PASS | - |
-| `BrokerLogin` | ? Yes | ? Yes | ?? PARTIAL | P2 (#1) |
-| `BrokerTime` | ? Yes | ? Yes | ?? PARTIAL | P2 (#4) |
-| `BrokerAsset` | ? Yes | ? Yes | ?? PARTIAL | P1 (#5) |
-| `BrokerAccount` | ?? Optional | ? Yes | ? PASS | P1 (#6) |
-| `BrokerBuy2` | ? Yes | ? Yes | ? PASS | - |
-| `BrokerSell2` | ?? Optional | ? Yes | ? PASS | - |
-| `BrokerTrade` | ?? Optional | ? Yes | ? PASS | - |
-| `BrokerHistory2` | ?? Optional | ? No | ? FAIL | P2 (#7) |
-| `BrokerHistory` | ?? Optional | ? No | ? FAIL | P2 (#7) |
-| `BrokerBuy` | ?? Optional | ? No | ? FAIL | P3 |
-| `BrokerSell` | ?? Optional | ? No | ? FAIL | P3 |
-| `BrokerCommand` | ? Yes | ? Yes | ?? PARTIAL | P3 (#6) |
+| `BrokerOpen` | ✅ Yes | ✅ Yes | ✅ PASS | - |
+| `BrokerLogin` | ✅ Yes | ✅ Yes | ⚠️ PARTIAL | P2 (#1) |
+| `BrokerTime` | ✅ Yes | ✅ Yes | ⚠️ PARTIAL | P2 (#4) |
+| `BrokerAsset` | ✅ Yes | ✅ Yes | ⚠️ PARTIAL | P1 (#5) |
+| `BrokerAccount` | ⚠️ Optional | ✅ Yes | ✅ PASS | P1 (#6) |
+| `BrokerBuy2` | ✅ Yes | ✅ Yes | ✅ PASS | - |
+| `BrokerSell2` | ⚠️ Optional | ✅ Yes | ✅ PASS | - |
+| `BrokerTrade` | ⚠️ Optional | ✅ Yes | ✅ PASS | - |
+| `BrokerHistory2` | ⚠️ Optional | ✅ No | ✅ FAIL | P2 (#7) |
+| `BrokerHistory` | ⚠️ Optional | ✅ No | ✅ FAIL | P2 (#7) |
+| `BrokerBuy` | ⚠️ Optional | ✅ No | ✅ FAIL | P3 |
+| `BrokerSell` | ⚠️ Optional | ✅ No | ✅ FAIL | P3 |
+| `BrokerCommand` | ✅ Yes | ✅ Yes | ⚠️ PARTIAL | P3 (#6) |
 
 ### Overall Scores
 
@@ -1129,7 +1129,7 @@ int BrokerSell(int nTradeID, int nAmount)
 8. ? **v1.1.0: BrokerHistory2 implemented for historical data**
 
 ### Weaknesses
-1. ?? Some BrokerCommand features missing (low priority)
+1. ⚠️ Some BrokerCommand features missing (low priority)
 2. ? No legacy BrokerBuy/BrokerSell (low impact)
 
 ### Recommendation
