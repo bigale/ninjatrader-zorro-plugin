@@ -105,34 +105,8 @@ namespace NinjaTrader.NinjaScript.AddOns
             }
         }
         
-        // **NEW: Handle order execution updates for automatic cleanup**
-        private void OnOrderExecution(object sender, ExecutionEventArgs e)
-        {
-            try
-            {
-                // Log execution at DEBUG level
-                Log(LogLevel.DEBUG, $"Order {e.Order.OrderId} executed: {e.Execution.Quantity}@{e.Execution.Price}");
-                
-                // When order reaches terminal state, schedule cleanup
-                if (e.Order.OrderState == OrderState.Filled || 
-                    e.Order.OrderState == OrderState.Cancelled || 
-                    e.Order.OrderState == OrderState.Rejected)
-                {
-                    Log(LogLevel.TRACE, $"Order {e.Order.OrderId} reached terminal state: {e.Order.OrderState}");
-                    
-                    // Delay removal to allow final status queries
-                    Task.Delay(TimeSpan.FromMinutes(5)).ContinueWith(_ => {
-                        CleanupOldOrders();
-                    });
-                }
-            }
-            catch (Exception ex)
-            {
-                Log(LogLevel.ERROR, $"Error in OnOrderExecution: {ex.Message}");
-            }
-        }
-        
-        // **NEW: Clean up old completed orders**
+        // **Clean up old completed orders**
+        // Called periodically to prevent memory leaks from accumulating orders
         private void CleanupOldOrders()
         {
             try
@@ -154,8 +128,6 @@ namespace NinjaTrader.NinjaScript.AddOns
                         Order orderToRemove;
                         if (activeOrders.TryRemove(completedOrders[i].OrderId, out orderToRemove))
                         {
-                            // Unsubscribe from execution events
-                            orderToRemove.Execution -= OnOrderExecution;
                             orderCleanupCount++;
                         }
                     }
@@ -678,14 +650,16 @@ namespace NinjaTrader.NinjaScript.AddOns
                 Log(LogLevel.TRACE, $"Created order: {order.OrderId}");                
                 currentAccount.Submit(new[] { order });
                 
-                // **NEW: Subscribe to order execution events for automatic cleanup**
-                // Note: NinjaTrader uses Execution event, not OrderUpdate
-                order.Execution += OnOrderExecution;
-                
                 Log(LogLevel.INFO, $"ORDER PLACED: {action} {quantity} {instrumentName} @ {orderType} (ID:{order.OrderId})");
                 
                 activeOrders[order.OrderId] = order;  // Store in dictionary
                 orderCount++;
+                
+                // Cleanup old orders periodically (every 10 orders)
+                if (orderCount % 10 == 0)
+                {
+                    CleanupOldOrders();
+                }
                 
                 Log(LogLevel.DEBUG, "==== PlaceOrder SUCCESS ====");
                 return $"ORDER:{order.OrderId}";
