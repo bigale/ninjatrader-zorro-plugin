@@ -11,7 +11,7 @@ echo.
 REM Step 1: Build
 echo [1/3] Building NT8.dll (Release)...
 cd build
-cmake --build . --config Release --target NT8Plugin
+cmake --build . --config Release
 if errorlevel 1 (
     echo.
     echo ERROR: Build failed!
