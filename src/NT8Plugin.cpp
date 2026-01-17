@@ -398,6 +398,9 @@ DLLFUNC int BrokerAsset(char* Asset, double* pPrice, double* pSpread,
                 }
             }
             
+            // **CRITICAL FIX: Zorro 2.70 checks pLotAmount even in subscribe mode!**
+            if (pLotAmount) *pLotAmount = 1.0;
+            
             LogMessage("# Subscribed to %s", Asset);
             return 1;
         }
