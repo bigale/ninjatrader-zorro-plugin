@@ -4,12 +4,12 @@
 
 ### Key File Locations
 ```
-Plugin DLL:     C:\Zorro\Plugin\NT8.dll
+Plugin DLL:     C:\Users\bigal\source\repos\ninjatrader-zorro-plugin\zorro\Plugin\NT8.dll
 AddOn Source:   C:\Users\zorro\Documents\NinjaTrader 8\bin\Custom\AddOns\ZorroBridge.cs
-Assets File:    C:\Users\zorro\source\repos\ninjatrader-zorro-plugin\zorro\Log\Assets.csv
-AssetsRithmic:  C:\Users\zorro\source\repos\ninjatrader-zorro-plugin\zorro\Log\AssetsRithmic.csv
-Accounts File:  C:\Users\zorro\source\repos\ninjatrader-zorro-plugin\zorro\History\Accounts.csv
-Test Log:       C:\Users\zorro\source\repos\ninjatrader-zorro-plugin\zorro\Log\AutoTradeTest_demo.log
+Assets File:    C:\Users\bigal\source\repos\ninjatrader-zorro-plugin\zorro\Log\Assets.csv
+AssetsRithmic:  C:\Users\bigal\source\repos\ninjatrader-zorro-plugin\zorro\Log\AssetsRithmic.csv
+Accounts File:  C:\Users\bigal\source\repos\ninjatrader-zorro-plugin\zorro\History\Accounts.csv
+Test Log:       C:\Users\bigal\source\repos\ninjatrader-zorro-plugin\zorro\Log\AutoTradeTest_demo.log
 ```
 
 ### Build & Deploy Workflow
@@ -19,7 +19,7 @@ Test Log:       C:\Users\zorro\source\repos\ninjatrader-zorro-plugin\zorro\Log\A
 # From repo root
 cd build
 cmake --build . --config Release
-Copy-Item "Release\NT8.dll" "C:\Zorro\Plugin\NT8.dll" -Force
+Copy-Item "Release\NT8.dll" "C:\Users\bigal\source\repos\ninjatrader-zorro-plugin\zorro\Plugin\NT8.dll" -Force
 ```
 
 **Update AddOn:**
@@ -73,12 +73,12 @@ Copy-Item "ninjatrader-addon\ZorroBridge.cs" "C:\Users\zorro\Documents\NinjaTrad
 
 **AutoTradeTest log file:**
 ```
-C:\Users\zorro\source\repos\ninjatrader-zorro-plugin\zorro\Log\AutoTradeTest_demo.log
+C:\Users\bigal\source\repos\ninjatrader-zorro-plugin\zorro\Log\AutoTradeTest_demo.log
 ```
 
 **View recent log entries:**
 ```powershell
-Get-Content "C:\Users\zorro\source\repos\ninjatrader-zorro-plugin\zorro\Log\AutoTradeTest_demo.log" -Tail 50
+Get-Content "C:\Users\bigal\source\repos\ninjatrader-zorro-plugin\zorro\Log\AutoTradeTest_demo.log" -Tail 50
 ```
 
 ### Configuration Files
@@ -302,3 +302,4 @@ git commit -m "Title line" `
 ```
 
 **RULE:** Always use Method 1 for detailed commit messages to avoid PowerShell newline issues.
+

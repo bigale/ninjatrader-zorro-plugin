@@ -282,7 +282,8 @@ namespace NinjaTrader.NinjaScript.AddOns
                         return HandleGetPosition(parts);
 
                     case "PLACEORDER":
-                        Log(LogLevel.ERROR, $"!! PLACEORDER RECEIVED: {command}");
+                        // Log at DEBUG level since this is normal operation
+                        Log(LogLevel.DEBUG, $"PLACEORDER command: {parts[1]} {parts[3]} {parts[2]}");
                         return HandlePlaceOrder(parts);
 
                     case "CANCELORDER":

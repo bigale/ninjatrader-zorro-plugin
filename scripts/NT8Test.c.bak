@@ -164,7 +164,7 @@ function run()
 		g_TestComplete = 0;
 		
 		// Run all tests immediately in INITRUN
-		//asset("MESH26");
+		asset("MESH26");
 		
 		testConnection();
 		testAccountInfo();

@@ -304,7 +304,7 @@ int TcpBridge::MarketPosition(const char* instrument, const char* account)
     std::string response = SendCommand(cmd);
     
     // Log to file for debugging
-    FILE* log = fopen("C:\\Zorro_2.66\\TcpBridge_debug.log", "a");
+    FILE* log = fopen("C:\\Users\\bigal\\source\\repos\\ninjatrader-zorro-plugin\\zorro\\Log\\TcpBridge_debug.log", "a");
     if (log) {
         fprintf(log, "[MarketPosition] query: %s\n", cmd.c_str());
         fprintf(log, "[MarketPosition] response: '%s'\n", response.c_str());
@@ -387,7 +387,7 @@ int TcpBridge::Command(const char* command, const char* account, const char* ins
         if (parts.size() >= 2 && parts[0] == "ORDER") {
             m_lastNtOrderId = parts[1];  // Store the NT GUID
             
-            FILE* log = fopen("C:\\Zorro_2.66\\TcpBridge_debug.log", "a");
+            FILE* log = fopen("C:\\Users\\bigal\\source\\repos\\ninjatrader-zorro-plugin\\zorro\\Log\\TcpBridge_debug.log", "a");
             if (log) {
                 fprintf(log, "[Command] PLACEORDER response: %s\n", response.c_str());
                 fprintf(log, "[Command] Extracted NT order ID: %s\n", m_lastNtOrderId.c_str());

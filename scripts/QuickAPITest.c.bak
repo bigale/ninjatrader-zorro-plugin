@@ -8,7 +8,7 @@ function run()
 	
 	if(is(INITRUN)) {
 		brokerCommand(SET_DIAGNOSTICS, 1);
-		//asset("MESH26");
+		asset("MESH26");
 		printf("\n=== Quick NT8 API Test ===\n");
 	}
 	

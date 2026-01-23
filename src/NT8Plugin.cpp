@@ -263,7 +263,7 @@ DLLFUNC int BrokerOpen(char* Name, FARPROC fpMessage, FARPROC fpProgress)
 DLLFUNC int BrokerLogin(char* User, char* Pwd, char* Type, char* Accounts)
 {
     // ALWAYS log to file for debugging
-    FILE* debugLog = fopen("C:\\Zorro_2.66\\NT8_debug.log", "a");
+    FILE* debugLog = fopen("C:\\Users\\bigal\\source\\repos\\ninjatrader-zorro-plugin\\zorro\\Log\\NT8_debug.log", "a");
     if (debugLog) {
         fprintf(debugLog, "[BrokerLogin] Called with User='%s'\n", User ? User : "NULL");
         fflush(debugLog);
@@ -315,7 +315,7 @@ DLLFUNC int BrokerLogin(char* User, char* Pwd, char* Type, char* Accounts)
     LogMessage("# NT8 connected to account: %s (via TCP)", g_state.account.c_str());
     
     if (debugLog) {
-        debugLog = fopen("C:\\Zorro_2.66\\NT8_debug.log", "a");
+        debugLog = fopen("C:\\Users\\bigal\\source\\repos\\ninjatrader-zorro-plugin\\zorro\\Log\\NT8_debug.log", "a");
         fprintf(debugLog, "[BrokerLogin] Connected successfully to: %s\n", User);
         fflush(debugLog);
         fclose(debugLog);
@@ -371,6 +371,16 @@ DLLFUNC int BrokerAsset(char* Asset, double* pPrice, double* pSpread,
     
     // Subscribe mode (pPrice == NULL) - just subscribe to data
     if (!pPrice) {
+        // **DIAGNOSTIC: Log to file to see if pLotAmount is NULL**
+        FILE* debugLog = fopen("C:\\Users\\bigal\\source\\repos\\ninjatrader-zorro-plugin\\zorro\\Log\\BrokerAsset_debug.log", "a");
+        if (debugLog) {
+            fprintf(debugLog, "\n[SUBSCRIBE MODE] Asset=%s\n", Asset);
+            fprintf(debugLog, "  pPrice=%p (should be NULL)\n", pPrice);
+            fprintf(debugLog, "  pLotAmount=%p (is it NULL?)\n", pLotAmount);
+            fflush(debugLog);
+            fclose(debugLog);
+        }
+        
         // Send SUBSCRIBE command and parse response
         std::string cmd = std::string("SUBSCRIBE:") + Asset;
         std::string response = g_bridge->SendCommand(cmd);
@@ -398,16 +408,35 @@ DLLFUNC int BrokerAsset(char* Asset, double* pPrice, double* pSpread,
                 }
             }
             
-            // **CRITICAL FIX: Zorro 2.70 checks pLotAmount even in subscribe mode!**
-            if (pLotAmount) *pLotAmount = 1.0;
+            // **CRITICAL: In subscribe mode, do NOT set pPip/pPipCost!**
+            // Zorro 2.70 might pass valid pointers but expects us NOT to use them
+            // Only pLotAmount should be set if present
+            
+            if (pLotAmount) {
+                *pLotAmount = 1.0;
+                
+                if (debugLog) {
+                    debugLog = fopen("C:\\Users\\bigal\\source\\repos\\ninjatrader-zorro-plugin\\zorro\\Log\\BrokerAsset_debug.log", "a");
+                    fprintf(debugLog, "  ? SET pLotAmount=1.0\n");
+                    fclose(debugLog);
+                }
+            } else {
+                FILE* warnLog = fopen("C:\\Users\\bigal\\source\\repos\\ninjatrader-zorro-plugin\\zorro\\Log\\BrokerAsset_debug.log", "a");
+                if (warnLog) {
+                    fprintf(warnLog, "  ??  pLotAmount is NULL! Zorro didn't pass it!\n");
+                    fclose(warnLog);
+                }
+            }
             
             LogMessage("# Subscribed to %s", Asset);
-            return 1;
+            return 1;  // ? RETURN HERE - do NOT fall through to query mode!
         }
         
         LogError("Failed to subscribe to %s", Asset);
         return 0;
     }
+    
+    // **QUERY MODE ONLY** - pPrice != NULL means Zorro wants current data
     
     // Make sure we're subscribed
     if (g_state.currentSymbol != Asset) {
@@ -435,16 +464,22 @@ DLLFUNC int BrokerAsset(char* Asset, double* pPrice, double* pSpread,
         *pVolume = volume;
     }
     
-    // **FIXED: Return actual contract specs from NT8**
+    // **QUERY MODE: Now it's safe to set contract specs**
+    
     if (pPip) {
         auto it = g_state.assetSpecs.find(Asset);
         if (it != g_state.assetSpecs.end() && it->second.tickSize > 0) {
             *pPip = it->second.tickSize;
+            
+            // **DEBUG: Log what we're ACTUALLY writing**
+            FILE* dbg = fopen("C:\\Users\\bigal\\source\\repos\\ninjatrader-zorro-plugin\\zorro\\Log\\BrokerAsset_debug.log", "a");
+            if (dbg) {
+                fprintf(dbg, "  ? WRITING pPip = %.8f (from cached %.8f)\n", *pPip, it->second.tickSize);
+                fclose(dbg);
+            }
+            
             LogDebug("# Returning tick size for %s: %.4f", Asset, it->second.tickSize);
         } else {
-            // **ZORRO 2.70 FIX: Must return non-zero default**
-            // Default tick size for micro futures (MES, MNQ, etc.)
-            // Zorro will use Assets.csv if available, otherwise this default
             *pPip = 0.25;
             LogInfo("# Using default tick size %.4f for %s (AddOn specs not available)", *pPip, Asset);
         }
@@ -454,18 +489,56 @@ DLLFUNC int BrokerAsset(char* Asset, double* pPrice, double* pSpread,
         auto it = g_state.assetSpecs.find(Asset);
         if (it != g_state.assetSpecs.end() && it->second.pointValue > 0) {
             *pPipCost = it->second.pointValue;
+            
+            // **DEBUG: Log what we're ACTUALLY writing**
+            FILE* dbg = fopen("C:\\Users\\bigal\\source\\repos\\ninjatrader-zorro-plugin\\zorro\\Log\\BrokerAsset_debug.log", "a");
+            if (dbg) {
+                fprintf(dbg, "  ? WRITING pPipCost = %.8f (from cached %.8f)\n", *pPipCost, it->second.pointValue);
+                fclose(dbg);
+            }
+            
             LogDebug("# Returning point value for %s: %.2f", Asset, it->second.pointValue);
         } else {
-            // **ZORRO 2.70 FIX: Must return non-zero default**
-            // Default point value for MES ($1.25 per 0.25 tick)
-            // Zorro will use Assets.csv if available, otherwise this default
             *pPipCost = 1.25;
             LogInfo("# Using default point value $%.2f for %s (AddOn specs not available)", *pPipCost, Asset);
         }
     }
     
-    // **CRITICAL: LotAmount must be non-zero for Zorro 2.70**
-    if (pLotAmount) *pLotAmount = 1.0;
+    // **CRITICAL: LotAmount in QUERY mode**
+    FILE* queryLog = fopen("C:\\Users\\bigal\\source\\repos\\ninjatrader-zorro-plugin\\zorro\\Log\\BrokerAsset_debug.log", "a");
+    if (queryLog) {
+        fprintf(queryLog, "\n[QUERY MODE] Asset=%s\n", Asset);
+        fprintf(queryLog, "  pPrice=%p\n", pPrice);
+        fprintf(queryLog, "  pPip=%p pPipCost=%p pLotAmount=%p\n", pPip, pPipCost, pLotAmount);
+        
+        // Check if we have specs
+        auto it = g_state.assetSpecs.find(Asset);
+        if (it != g_state.assetSpecs.end()) {
+            fprintf(queryLog, "  Cached specs: tick=%.4f value=%.2f\n", 
+                it->second.tickSize, it->second.pointValue);
+        } else {
+            fprintf(queryLog, "  NO cached specs for %s!\n", Asset);
+        }
+        
+        fflush(queryLog);
+        fclose(queryLog);
+    }
+    
+    if (pLotAmount) {
+        *pLotAmount = 1.0;
+        
+        if (queryLog) {
+            queryLog = fopen("C:\\Users\\bigal\\source\\repos\\ninjatrader-zorro-plugin\\zorro\\Log\\BrokerAsset_debug.log", "a");
+            fprintf(queryLog, "  ? SET pLotAmount=1.0\n");
+            fclose(queryLog);
+        }
+    } else {
+        FILE* warnLog = fopen("C:\\Users\\bigal\\source\\repos\\ninjatrader-zorro-plugin\\zorro\\Log\\BrokerAsset_debug.log", "a");
+        if (warnLog) {
+            fprintf(warnLog, "  ??  pLotAmount is NULL (Zorro validation query - NORMAL)\n");
+            fclose(warnLog);
+        }
+    }
     
     if (pMargin) *pMargin = 0;
     
@@ -950,7 +1023,7 @@ DLLFUNC int BrokerHistory2(char* Asset, DATE tStart, DATE tEnd,
     char msg[256];
     
     // ALWAYS log to file for debugging
-    FILE* histLog = fopen("C:\\Zorro_2.66\\BrokerHistory2_debug.log", "a");
+    FILE* histLog = fopen("C:\\Users\\bigal\\source\\repos\\ninjatrader-zorro-plugin\\zorro\\Log\\BrokerHistory2_debug.log", "a");
     if (histLog) {
         fprintf(histLog, "\n==== BrokerHistory2 CALL ====\n");
         fprintf(histLog, "Asset: %s\n", Asset ? Asset : "NULL");
@@ -1173,7 +1246,7 @@ DLLFUNC double BrokerCommand(int Command, DWORD dwParameter)
         
         case SET_DIAGNOSTICS:
             {
-                FILE* debugLog = fopen("C:\\Zorro_2.66\\NT8_debug.log", "a");
+                FILE* debugLog = fopen("C:\\Users\\bigal\\source\\repos\\ninjatrader-zorro-plugin\\zorro\\Log\\NT8_debug.log", "a");
                 if (debugLog) {
                     fprintf(debugLog, "[SET_DIAGNOSTICS] Called with level=%d\n", (int)dwParameter);
                     fflush(debugLog);
